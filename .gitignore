@@ -1,0 +1,13 @@
+# Survey output: real networks, real device names, real addresses. Never commit
+# one by accident — a document pack is exactly the sort of file that should not
+# leave the machine that made it.
+carta-surveys/
+*.db
+*.log
+
+# Binaries. Anchored to the repository root with a leading slash: a bare
+# "carta" pattern also matches the cmd/carta/ DIRECTORY, which silently kept
+# the entire command out of the first commit.
+/carta
+/carta.exe
+/dist/

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>carta — network survey</title>
+<!-- Served from the binary like everything else here: the UI must render the
+     same on an air-gapped machine as on a connected one. -->
+<link rel="icon" type="image/png" href="favicon.png" />
+<link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="bar">
+    <img class="mark" src="favicon.png" alt="" width="20" height="20" />
+    <div class="brand">carta</div>
+    <div class="vantage" id="vantage">loading…</div>
+    <div class="legend">
+      <span class="key"><i class="dot named"></i>identified</span>
+      <span class="key"><i class="dot partial"></i>partly known</span>
+      <span class="key"><i class="dot unknown"></i>unidentified</span>
+      <span class="key"><i class="dot infra"></i>infrastructure</span>
+    </div>
+  </header>
+
+  <main>
+    <section class="graph">
+      <canvas id="map"></canvas>
+      <!-- Coverage is drawn as a bar under the map rather than buried in a
+           report: the proportion of the address range that never answered is
+           the first thing that should qualify what the picture shows. -->
+      <div class="coverage" id="coverage"></div>
+    </section>
+
+    <aside class="panel">
+      <nav class="tabs">
+        <button data-tab="device" class="on">Device</button>
+        <button data-tab="findings">Findings</button>
+        <button data-tab="list">All</button>
+      </nav>
+      <div class="tabbody" id="device">
+        <p class="hint">Select a device on the map.</p>
+      </div>
+      <div class="tabbody hidden" id="findings"></div>
+      <div class="tabbody hidden" id="list"></div>
+    </aside>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
