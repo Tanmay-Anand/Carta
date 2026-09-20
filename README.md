@@ -69,12 +69,12 @@ carta-surveys/20260920T041611Z/
 └── survey.db         the same survey, queryable in SQLite
 ```
 
-A real inventory row, from a home network:
+Two rows of an inventory, in the shape a real one comes out in:
 
 | Address | MAC | Name | Vendor | Class | Services |
 |---|---|---|---|---|---|
-| `192.168.0.1` | `b8:fb:b3:95:58:0d` | Archer-C5 <sub>asserted</sub> | TP-Link <sub>asserted</sub> | router / gateway <sub>observed</sub> | dhcp (67/udp), dns (53/udp), telnet (23/tcp) |
-| `192.168.0.4` | `7e:5d:c3:c7:a9:be` | — | — | personal device (randomised MAC) <sub>weak</sub> | |
+| `192.168.10.1` | `02:00:5e:10:00:01` | gateway.lab.example <sub>inferred</sub> | — | router <sub>inferred</sub> | https (443/tcp) |
+| `192.168.10.31` | `7e:5d:c3:00:00:aa` | — | — | personal device (randomised MAC) <sub>weak</sub> | |
 
 The second row is the point. It answered, it would not say what it is, its MAC
 is randomised so no vendor can be inferred, and all of that is stated rather
@@ -86,6 +86,11 @@ than papered over.
 carta ui
 ```
 
+<p align="center">
+  <img src="assets/carta-map.webp" width="900"
+       alt="The survey map with a device selected: every claim shown beside the evidence for it, and the unanswered part of the range hatched along the bottom.">
+</p>
+
 Opens the survey on `127.0.0.1` — bound to loopback specifically, because a
 survey document lists every device on a network and where its management
 interface is, and serving that on `0.0.0.0` would publish the map of the network
@@ -95,6 +100,18 @@ Shape carries certainty: a filled node is identified, an outlined node is partly
 known, a dashed node answered and revealed nothing. The bar under the map shows
 what proportion of the address range answered at all, with the silent remainder
 hatched rather than filled.
+
+The findings tab is the same discipline applied to conclusions — each one states
+how strongly it is held, and the coverage note says what was not reached:
+
+<p align="center">
+  <img src="assets/carta-findings.webp" width="900"
+       alt="Findings from a survey, each marked with the confidence it is held at.">
+</p>
+
+> Both captures are the real UI running against a synthetic snapshot of a
+> fictional `192.168.10.0/24`. No real network appears in this repository, which
+> is the same reason the tool writes its own output to a gitignored directory.
 
 ## Drift
 
