@@ -1,0 +1,43 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The whole pitch is "one binary, every platform, no runtime". If that is
+    # true it has to be true on all three, so all three build and test here.
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Read from go.mod so CI cannot drift behind the toolchain the code
+          # is actually written against.
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test -race ./...
+
+  build:
+    # Cross-compilation is a feature of this tool, not an afterthought, so a
+    # break in it should fail CI rather than surface at a site.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          # Read from go.mod so CI cannot drift behind the toolchain the code
+          # is actually written against.
+          go-version-file: go.mod
+      - name: cross-compile every target
+        run: |
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/} CGO_ENABLED=0 \
+              go build -o /dev/null ./cmd/carta || exit 1
+            echo "ok $target"
+          done

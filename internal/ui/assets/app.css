@@ -1,0 +1,188 @@
+/* carta UI — one stylesheet, no framework, no web fonts.
+   Everything a browser needs to render this is already in the binary. */
+
+:root {
+  --bg: #fbfbf9;
+  --fg: #16181d;
+  --dim: #6b7280;
+  --rule: #e3e3de;
+  --panel: #ffffff;
+  --named: #24292f;
+  --partial: #0969da;
+  --unknown: #b58900;
+  --infra: #0969da;
+  --risk: #b42318;
+  --warn: #b54708;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e0f12;
+    --fg: #e8e8e3;
+    --dim: #9aa0aa;
+    --rule: #24262c;
+    --panel: #14161a;
+    --named: #d6d6d0;
+    --partial: #58a6ff;
+    --unknown: #d9a441;
+    --infra: #58a6ff;
+    --risk: #ff7b72;
+    --warn: #e3a008;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--fg);
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: .6rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  flex-wrap: wrap;
+}
+
+.brand {
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  font-size: .78rem;
+}
+
+/* The mark is black strokes on transparency, so it disappears on a dark
+   background. Inverting it is a two-line fix; shipping a second PNG would be
+   another file in the binary for the same eight kilobytes of information. */
+.mark { display: block; margin-right: -1rem; opacity: .9; }
+@media (prefers-color-scheme: dark) {
+  .mark { filter: invert(1); }
+}
+
+.vantage { font-family: var(--mono); font-size: .72rem; color: var(--dim); }
+.legend { margin-left: auto; display: flex; gap: .9rem; font-size: .68rem; color: var(--dim); }
+.key { display: flex; align-items: center; gap: .35rem; }
+
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot.named { background: var(--named); }
+.dot.partial { background: transparent; border: 1.5px solid var(--partial); }
+.dot.unknown { background: transparent; border: 1.5px dashed var(--unknown); }
+.dot.infra { background: var(--infra); }
+
+main { flex: 1; display: flex; min-height: 0; }
+
+.graph { flex: 1; position: relative; min-width: 0; }
+canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+canvas:active { cursor: grabbing; }
+
+.coverage {
+  position: absolute;
+  left: 1rem; right: 1rem; bottom: .75rem;
+  font-family: var(--mono);
+  font-size: .66rem;
+  color: var(--dim);
+}
+.covbar {
+  height: 6px;
+  display: flex;
+  border: 1px solid var(--rule);
+  margin-bottom: .35rem;
+}
+.covbar i { display: block; height: 100%; }
+.covbar .responded { background: var(--named); }
+/* Unanswered space is drawn as hatching, never as a filled bar: it is unknown,
+   and a solid colour would read as "measured and empty". */
+.covbar .silent {
+  background: repeating-linear-gradient(45deg, var(--rule) 0 3px, transparent 3px 6px);
+}
+
+.panel {
+  width: 27rem;
+  max-width: 45vw;
+  border-left: 1px solid var(--rule);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tabs { display: flex; border-bottom: 1px solid var(--rule); }
+.tabs button {
+  flex: 1;
+  padding: .55rem;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--dim);
+  font: inherit;
+  font-size: .75rem;
+  cursor: pointer;
+}
+.tabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
+
+.tabbody { padding: 1rem; overflow-y: auto; flex: 1; font-size: .8rem; line-height: 1.5; }
+.hidden { display: none; }
+.hint { color: var(--dim); }
+
+h2.devname { font-size: 1rem; margin: 0 0 .15rem; }
+.devsub { font-family: var(--mono); font-size: .7rem; color: var(--dim); margin-bottom: .9rem; }
+
+table { width: 100%; border-collapse: collapse; font-size: .74rem; }
+th, td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { color: var(--dim); font-weight: 500; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
+td.k { color: var(--dim); white-space: nowrap; }
+code, .mono { font-family: var(--mono); font-size: .72rem; }
+
+/* Confidence is a word, never a colour alone — colour-blind readers and
+   greyscale printouts both have to carry the same meaning. */
+.conf {
+  font-family: var(--mono);
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  padding: .05rem .3rem;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+.conf.asserted { border-color: var(--partial); color: var(--partial); }
+.conf.observed { border-color: var(--named); color: var(--fg); }
+.conf.inferred { border-style: dashed; }
+.conf.weak { border-style: dotted; opacity: .8; }
+
+.evidence { color: var(--dim); font-size: .68rem; }
+
+.finding { border-left: 2px solid var(--rule); padding: .1rem 0 .1rem .7rem; margin-bottom: 1rem; }
+.finding.risk { border-color: var(--risk); }
+.finding.warn { border-color: var(--warn); }
+.finding h3 { font-size: .82rem; margin: 0 0 .25rem; }
+.finding p { margin: 0; color: var(--dim); white-space: pre-wrap; font-size: .74rem; }
+
+.row { display: flex; justify-content: space-between; gap: .5rem; padding: .3rem 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
+.row:hover { background: rgba(127,127,127,.07); }
+.row .label { font-weight: 500; }
+.row .meta { color: var(--dim); font-family: var(--mono); font-size: .68rem; text-align: right; }
+
+.searchbox {
+  width: 100%;
+  padding: .4rem .5rem;
+  margin-bottom: .6rem;
+  font: inherit;
+  font-size: .76rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+}
