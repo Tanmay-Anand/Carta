@@ -1,18 +1,14 @@
-// Package store persists a survey twice, on purpose.
+// Package sqlitedb writes the queryable form of a survey.
 //
-// The JSON snapshot is the record of truth for drift: it is text, it diffs in
-// git, a human can read it, and it will still open in ten years. The SQLite
-// database is the queryable form — "which devices appeared since March and
-// offer SMB" is a join, not a script — and it is what the UI reads.
-//
-// Neither is derived from the other at read time: both are written from the
-// same model in the same run, so they cannot disagree about what was seen.
-package store
+// The JSON snapshot (package snapshot) is the record of truth for drift; this
+// is the form you query — "which devices appeared since March and offer SMB"
+// is a join, not a script. It is kept in its own package so that only the
+// binaries that want it link the SQLite engine.
+package sqlitedb
 
 import (
 	"database/sql"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 
@@ -20,38 +16,6 @@ import (
 
 	"github.com/Tanmay-Anand/carta/internal/model"
 )
-
-// WriteSnapshot writes the JSON record of a survey.
-//
-// The graph is sorted first so that two surveys of an unchanged network produce
-// byte-identical files. That property is what makes `git diff` on a snapshot a
-// legitimate drift report, and it is worth more than it costs.
-func WriteSnapshot(path string, g *model.Graph) error {
-	g.Sort()
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	b, err := json.MarshalIndent(g, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
-}
-
-// ReadSnapshot loads a survey and restores the entity-resolution indexes that
-// are rebuilt rather than serialised.
-func ReadSnapshot(path string) (*model.Graph, error) {
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var g model.Graph
-	if err := json.Unmarshal(b, &g); err != nil {
-		return nil, fmt.Errorf("%s: %w", path, err)
-	}
-	g.Rebuild()
-	return &g, nil
-}
 
 const schema = `
 CREATE TABLE IF NOT EXISTS survey (
@@ -84,8 +48,8 @@ CREATE INDEX IF NOT EXISTS idx_claim_entity ON claim(survey_id, entity_id);
 CREATE INDEX IF NOT EXISTS idx_identity_value ON identity(value);
 `
 
-// WriteDB writes the queryable form of a survey.
-func WriteDB(path string, g *model.Graph) error {
+// Write writes the queryable form of a survey.
+func Write(path string, g *model.Graph) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}

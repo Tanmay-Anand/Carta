@@ -1,0 +1,39 @@
+name: android
+
+# The Android build is slow (NDK, gomobile, Gradle), so it runs only when
+# something it is built from changes. The CLI's own matrix lives in ci.yml.
+on:
+  push:
+    branches: [main]
+    paths: ['android/**', 'mobile/**', 'internal/**', 'go.mod', 'go.sum', '.github/workflows/android.yml']
+  pull_request:
+    paths: ['android/**', 'mobile/**', 'internal/**', 'go.mod', 'go.sum', '.github/workflows/android.yml']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      # The binding is a separate module, so the root `go test ./...` in ci.yml
+      # never reaches it.
+      - name: Test the binding
+        working-directory: mobile
+        run: go vet ./... && go test ./...
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: android-actions/setup-android@v3
+      - name: Install the NDK and gomobile
+        run: |
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36"
+          cd mobile
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          gomobile init
+      - name: Build the debug APK
+        working-directory: android
+        run: bash ./gradlew --no-daemon assembleDebug

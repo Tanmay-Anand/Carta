@@ -12,7 +12,8 @@ import (
 
 	"github.com/Tanmay-Anand/carta/internal/model"
 	"github.com/Tanmay-Anand/carta/internal/orient"
-	"github.com/Tanmay-Anand/carta/internal/store"
+	"github.com/Tanmay-Anand/carta/internal/store/snapshot"
+	"github.com/Tanmay-Anand/carta/internal/store/sqlitedb"
 )
 
 func sample() (*model.Graph, *orient.Profile) {
@@ -158,10 +159,10 @@ func TestPackWritesEveryDocumentAndTheyRoundTrip(t *testing.T) {
 	// The snapshot is the drift baseline, so it has to survive a round trip
 	// with its claims and confidences intact.
 	snap := filepath.Join(dir, "survey.json")
-	if err := store.WriteSnapshot(snap, g); err != nil {
+	if err := snapshot.Write(snap, g); err != nil {
 		t.Fatal(err)
 	}
-	back, err := store.ReadSnapshot(snap)
+	back, err := snapshot.Read(snap)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -181,7 +182,7 @@ func TestDatabaseIsQueryable(t *testing.T) {
 	dir := t.TempDir()
 	g, _ := sample()
 	path := filepath.Join(dir, "survey.db")
-	if err := store.WriteDB(path, g); err != nil {
+	if err := sqlitedb.Write(path, g); err != nil {
 		t.Fatal(err)
 	}
 

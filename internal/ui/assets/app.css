@@ -1,5 +1,23 @@
-/* carta UI — one stylesheet, no framework, no web fonts.
+/* carta UI — one stylesheet, no framework, one bundled typeface.
    Everything a browser needs to render this is already in the binary. */
+
+/* JetBrains Mono (OFL; fonts/JetBrainsMono-OFL.txt) carries everything that is
+   measured — addresses, prefixes, counts, confidence. It is bundled rather than
+   left to the platform because the platform's monospace differs everywhere and
+   is Droid Sans Mono on Android; the identity rides on this one face. Loaded
+   from 'self', so the Content-Security-Policy is untouched. */
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
+  font-weight: 600 700;
+  font-display: swap;
+}
 
 :root {
   --bg: #fbfbf9;
@@ -13,7 +31,7 @@
   --infra: #0969da;
   --risk: #b42318;
   --warn: #b54708;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 
@@ -70,7 +88,24 @@ body {
   .mark { filter: invert(1); }
 }
 
+/* Off-screen until it has keyboard focus, then the first thing on the page. */
+.skip { position: absolute; left: -9999px; top: 0; }
+.skip:focus {
+  left: 1rem; top: .5rem; z-index: 10;
+  padding: .5rem .75rem;
+  background: var(--panel); color: var(--fg);
+  border: 1px solid var(--fg); border-radius: 4px;
+}
+:focus-visible { outline: 2px solid var(--partial); outline-offset: 2px; }
+
+/* Inside the Android app the native bar already names the app and the native
+   status strip already says what was surveyed, so the page's own header is
+   chrome, not information, and every pixel of it came out of the map. */
+.embedded .bar { display: none; }
+
 .vantage { font-family: var(--mono); font-size: .72rem; color: var(--dim); }
+.vantage .vpart { display: inline-block; margin-right: 1.4em; }
+.vantage .vpart:last-child { margin-right: 0; }
 .legend { margin-left: auto; display: flex; gap: .9rem; font-size: .68rem; color: var(--dim); }
 .key { display: flex; align-items: center; gap: .35rem; }
 
@@ -82,13 +117,17 @@ body {
 
 main { flex: 1; display: flex; min-height: 0; }
 
-.graph { flex: 1; position: relative; min-width: 0; }
-canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+/* The coverage strip sits under the map, not over it. Laid over the canvas, it
+   covered whatever nodes the layout placed at the bottom — on a short screen,
+   most of them — and the map was fitted to space it could not use. */
+.graph { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
+/* touch-action: none hands every gesture on the map to app.js, which pans and
+   pinch-zooms it, instead of letting the page scroll or zoom underneath. */
+canvas { flex: 1; width: 100%; min-height: 0; display: block; cursor: grab; touch-action: none; }
 canvas:active { cursor: grabbing; }
 
 .coverage {
-  position: absolute;
-  left: 1rem; right: 1rem; bottom: .75rem;
+  padding: .4rem 1rem .6rem;
   font-family: var(--mono);
   font-size: .66rem;
   color: var(--dim);
@@ -106,6 +145,9 @@ canvas:active { cursor: grabbing; }
 .covbar .silent {
   background: repeating-linear-gradient(45deg, var(--rule) 0 3px, transparent 3px 6px);
 }
+/* Never reached at all — a survey cut short. Left open, so it reads as a
+   different kind of nothing from the hatching. */
+.covbar .unswept { background: transparent; }
 
 .panel {
   width: 27rem;
@@ -185,4 +227,85 @@ code, .mono { font-family: var(--mono); font-size: .72rem; }
   color: var(--fg);
   border: 1px solid var(--rule);
   border-radius: 3px;
+}
+
+.change { padding: .35rem 0; border-bottom: 1px solid var(--rule); }
+.change .label { font-weight: 500; margin-right: .4rem; }
+.caveat { color: var(--warn); font-size: .74rem; margin: 0 0 .5rem; }
+.caveat.strong { font-weight: 600; }
+
+/* ---------- compact and sheet layouts ----------
+
+   compact (?embedded, or narrower than 760px): the vantage line moves into the
+   panel's head and the legend into a card behind a button on the map, so the
+   header stops eating the map's height. Shape still means certainty, so the
+   legend stays one tap away.
+
+   sheet (narrower than 760px): the map fills the screen and the panel slides
+   over it from the bottom, snapping to peek, half or full. app.js sets both
+   classes; the desktop's side-by-side layout is neither. */
+
+.handle, .panelhead, .legendbtn { display: none; }
+
+body.compact .panelhead { display: block; padding: .3rem 1rem .5rem; }
+body.compact .panelhead .vantage { display: block; font-size: .7rem; }
+
+body.compact .legendbtn {
+  display: block;
+  position: absolute; top: .6rem; right: .6rem; z-index: 5;
+  min-height: 32px; padding: .3rem .7rem;
+  font-family: var(--mono); font-size: .7rem;
+  color: var(--fg); background: var(--panel);
+  border: 1px solid var(--dim); border-radius: 4px;
+}
+.legendcard {
+  position: absolute; top: 3rem; right: .6rem; z-index: 5;
+  padding: .7rem .9rem;
+  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
+}
+.legendcard .legend { flex-direction: column; gap: .45rem; margin: 0; font-size: .74rem; }
+
+body.sheet { height: 100vh; height: 100dvh; }
+body.sheet main { display: block; position: relative; overflow: hidden; }
+body.sheet .graph { position: absolute; inset: 0; }
+/* The panel is always full height and slid down by a transform, so moving it
+   never relayouts the map underneath. No shadow: depth is tone and line. */
+body.sheet .panel {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  width: auto; max-width: none;
+  border-left: none; border-top: 1px solid var(--rule);
+  border-radius: 12px 12px 0 0;
+  will-change: transform;
+  z-index: 10; /* above the map's own overlays (the legend button and card) */
+}
+body.sheet .panel.animating { transition: transform .22s ease-out; }
+/* The grip (handle and head) takes vertical drags for the sheet; the canvas
+   keeps its own pan and pinch, and the panel's body scrolls normally. */
+body.sheet .grip { touch-action: none; cursor: grab; }
+body.sheet .handle {
+  display: flex; justify-content: center; align-items: center;
+  width: 100%; height: 22px; padding: 0;
+  background: none; border: none;
+}
+body.sheet .handle span { width: 36px; height: 4px; border-radius: 2px; background: var(--dim); opacity: .6; }
+body.sheet .tabbody { touch-action: pan-y; overscroll-behavior: contain; }
+body.sheet .panelhead .coverage { padding: .35rem 0 0; }
+
+@media (max-width: 760px) {
+  .bar { gap: .5rem 1rem; }
+  .tabs button { padding: .8rem .4rem; font-size: .8rem; }
+  .tabbody { font-size: .85rem; }
+  .row { padding: .6rem 0; }
+  .searchbox { font-size: 1rem; padding: .6rem; }
+}
+
+/* A phone on its side: wide enough for the side-by-side layout, but with so
+   little height that every row of chrome is taken from the map. */
+@media (max-height: 520px) and (min-width: 761px) {
+  .bar { padding: .3rem 1rem; gap: .3rem 1rem; }
+  .legend { gap: .6rem; }
+  .tabs button { padding: .4rem; }
+  .tabbody { padding: .6rem 1rem; }
+  .coverage { padding: .3rem 1rem .4rem; }
+  .panel { width: 22rem; }
 }

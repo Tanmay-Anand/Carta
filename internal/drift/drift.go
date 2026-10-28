@@ -22,27 +22,35 @@ import (
 
 // Change classifies one difference between two surveys.
 type Change struct {
-	Kind      string   // "appeared", "vanished", "moved", "mutated"
-	Entity    string   // label in the newer survey where one exists
-	Was       string   // previous state, for moved and mutated
-	Now       string   // current state
-	MatchedBy string   // which identity kind held across the two surveys
-	Details   []string // per-attribute changes, for mutated
+	Kind      string   `json:"kind"`                 // "appeared", "vanished", "moved", "mutated"
+	Entity    string   `json:"entity"`               // label in the newer survey where one exists
+	Was       string   `json:"was,omitempty"`        // previous state, for moved and mutated
+	Now       string   `json:"now,omitempty"`        // current state
+	MatchedBy string   `json:"matched_by,omitempty"` // which identity kind held across the two surveys
+	Details   []string `json:"details,omitempty"`    // per-attribute changes, for mutated
+
+	// Match is how strongly the two sides are believed to be the same device,
+	// from the identity that matched them: a burned-in MAC is an observation,
+	// a hostname is an inference, and an address alone is weak — on a DHCP
+	// network a rotated lease pairs two different devices that happen to have
+	// swapped addresses. Unknown for appeared and vanished, which matched
+	// nothing.
+	Match model.Confidence `json:"match"`
 }
 
 // Report is the full comparison.
 type Report struct {
-	BeforeID string
-	AfterID  string
-	Vantage  string
-	Changes  []Change
+	BeforeID string   `json:"before_id"`
+	AfterID  string   `json:"after_id"`
+	Vantage  string   `json:"vantage"`
+	Changes  []Change `json:"changes"`
 
 	// Comparable records whether the two surveys were taken from a position
 	// close enough for a comparison to mean anything. Two surveys from
 	// different subnets do not produce drift, they produce noise, and saying so
 	// is more useful than printing 200 spurious changes.
-	Comparable bool
-	Caveats    []string
+	Comparable bool     `json:"comparable"`
+	Caveats    []string `json:"caveats"`
 }
 
 // Compare diffs two surveys, oldest first.
@@ -53,12 +61,7 @@ func Compare(before, after *model.Graph) Report {
 		Vantage:  after.Vantage.Prefix,
 	}
 
-	r.Comparable = before.Vantage.Prefix == after.Vantage.Prefix
-	if !r.Comparable {
-		r.Caveats = append(r.Caveats, fmt.Sprintf(
-			"the surveys were taken on different prefixes (%s, then %s) — everything below is a difference between two networks, not drift within one",
-			before.Vantage.Prefix, after.Vantage.Prefix))
-	}
+	r.Caveats = append(r.Caveats, networkCaveats(&r, before.Vantage, after.Vantage)...)
 	if before.Vantage.Interface != after.Vantage.Interface {
 		r.Caveats = append(r.Caveats, fmt.Sprintf(
 			"the vantage interface changed (%s, then %s) — what is visible depends on where the instrument stands",
@@ -84,12 +87,12 @@ func Compare(before, after *model.Graph) Report {
 
 		if moved, was, now := movedAddress(b, a); moved {
 			r.Changes = append(r.Changes, Change{
-				Kind: "moved", Entity: a.Label(), Was: was, Now: now, MatchedBy: by,
+				Kind: "moved", Entity: a.Label(), Was: was, Now: now, MatchedBy: by, Match: matchConfidence(by),
 			})
 		}
 		if details := mutations(b, a); len(details) > 0 {
 			r.Changes = append(r.Changes, Change{
-				Kind: "mutated", Entity: a.Label(), MatchedBy: by, Details: details,
+				Kind: "mutated", Entity: a.Label(), MatchedBy: by, Details: details, Match: matchConfidence(by),
 			})
 		}
 	}
@@ -132,6 +135,93 @@ func match(b *model.Entity, candidates []*model.Entity, taken map[string]bool) (
 		}
 	}
 	return nil, ""
+}
+
+// matchConfidence is how much a match on each identity kind is worth.
+func matchConfidence(by string) model.Confidence {
+	switch by {
+	case "mac":
+		return model.High
+	case "host":
+		return model.Moderate
+	case "ip":
+		return model.Low
+	}
+	return model.Unknown
+}
+
+// networkCaveats decides whether the two surveys describe the same network.
+//
+// There is no reliable network identity to go on. An SSID is not read, a
+// BSSID changes from one access point to the next, and a phone cannot see the
+// gateway's MAC. What is left is a fingerprint of configuration — prefix,
+// gateway, DHCP server, resolvers, search domain — and 192.168.1.1/24 is the
+// fingerprint of half the home networks in the world. So a matching
+// fingerprint is necessary, not sufficient: a mismatch in prefix or gateway
+// makes the surveys incomparable, a mismatch anywhere else is printed, and a
+// match proves nothing, which is why the operator picks the baseline rather
+// than the tool guessing it.
+func networkCaveats(r *Report, b, a model.Vantage) []string {
+	var out []string
+	r.Comparable = b.Prefix == a.Prefix && sameOrUnknown(b.Gateway, a.Gateway)
+	if b.Prefix != a.Prefix {
+		out = append(out, fmt.Sprintf(
+			"the surveys were taken on different prefixes (%s, then %s) — everything below is a difference between two networks, not drift within one",
+			b.Prefix, a.Prefix))
+	} else if !sameOrUnknown(b.Gateway, a.Gateway) {
+		out = append(out, fmt.Sprintf(
+			"the default gateway differs (%s, then %s) — this is probably a different network that happens to use the same addresses, and everything below may be a difference between two networks",
+			b.Gateway, a.Gateway))
+	}
+	if !sameOrUnknown(b.DHCPServer, a.DHCPServer) {
+		out = append(out, fmt.Sprintf("the DHCP server differs (%s, then %s)", b.DHCPServer, a.DHCPServer))
+	}
+	if !sameSet(b.Resolvers, a.Resolvers) {
+		out = append(out, fmt.Sprintf("the DNS servers differ (%s, then %s)",
+			strings.Join(b.Resolvers, ", "), strings.Join(a.Resolvers, ", ")))
+	}
+	if !sameSet(b.SearchList, a.SearchList) {
+		out = append(out, fmt.Sprintf("the DNS search domains differ (%s, then %s)",
+			orNone(b.SearchList), orNone(a.SearchList)))
+	}
+	if bi, ai := b.InstrumentName(), a.InstrumentName(); bi != ai {
+		out = append(out, fmt.Sprintf(
+			"the surveys were taken by different instruments (%s, then %s), which see different things — a phone cannot read the ARP cache, so devices only visible at layer 2 will look like they vanished",
+			bi, ai))
+	}
+	return out
+}
+
+func sameOrUnknown(b, a string) bool { return b == "" || a == "" || b == a }
+
+// sameSet compares two lists ignoring order; an empty side is unknown.
+func sameSet(b, a []string) bool {
+	if len(b) == 0 || len(a) == 0 {
+		return true
+	}
+	bs, as := map[string]bool{}, map[string]bool{}
+	for _, x := range b {
+		bs[x] = true
+	}
+	for _, x := range a {
+		as[x] = true
+	}
+	if len(bs) != len(as) {
+		return false
+	}
+	for x := range bs {
+		if !as[x] {
+			return false
+		}
+	}
+	return true
+}
+
+func orNone(xs []string) string {
+	if len(xs) == 0 {
+		return "none"
+	}
+	return strings.Join(xs, ", ")
 }
 
 func identityValues(e *model.Entity, kind string) []string {
@@ -215,7 +305,7 @@ func describe(e *model.Entity) string {
 	if c, _ := e.Best("class"); c != "" {
 		parts = append(parts, c)
 	}
-	return strings.Join(parts, " · ")
+	return strings.Join(parts, "; ")
 }
 
 func alive(e *model.Entity) bool {
@@ -258,5 +348,19 @@ func (r Report) Summary() string {
 			parts = append(parts, fmt.Sprintf("%d %s", counts[k], k))
 		}
 	}
-	return "Drift since the last survey: " + strings.Join(parts, ", ") + "."
+	out := "Drift since the last survey: " + strings.Join(parts, ", ") + "."
+	if n := r.weakMatches(); n > 0 {
+		out += fmt.Sprintf(" %d matched by address only and may be different devices.", n)
+	}
+	return out
+}
+
+func (r Report) weakMatches() int {
+	n := 0
+	for _, c := range r.Changes {
+		if c.MatchedBy != "" && c.Match <= model.Low {
+			n++
+		}
+	}
+	return n
 }
