@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="bg">#0E0F12</color>
+    <color name="fg">#E8E8E3</color>
+    <color name="dim">#9AA0AA</color>
+    <color name="rule">#24262C</color>
+    <color name="panel">#14161A</color>
+    <color name="accent">#58A6FF</color>
+    <color name="warn">#E3A008</color>
+    <color name="risk">#FF7B72</color>
+    <!-- On inverse surfaces (the snackbar) the accent comes from the other
+         theme, so it stays readable on the inverted background. -->
+    <color name="accent_inverse">#0969DA</color>
+</resources>

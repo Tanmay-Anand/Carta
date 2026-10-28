@@ -39,6 +39,9 @@ type Profile struct {
 	Neighbours  []Neighbour // the ARP/NDP cache as it stands before we touch anything
 	Confounders []string
 	Interfaces  []InterfaceInfo
+
+	// Instrument names what took the survey; see model.Vantage.Instrument.
+	Instrument string
 }
 
 // Neighbour is one entry of the host's own ARP/NDP cache.
@@ -60,7 +63,7 @@ type InterfaceInfo struct {
 // unparseable resolver list degrades the survey, it does not end it, and what
 // could not be determined is left empty rather than guessed.
 func Run(ctx context.Context) (*Profile, error) {
-	p := &Profile{OS: runtime.GOOS + "/" + runtime.GOARCH}
+	p := &Profile{OS: runtime.GOOS + "/" + runtime.GOARCH, Instrument: "carta-cli"}
 	p.Host, _ = os.Hostname()
 
 	ifaces, err := net.Interfaces()
@@ -148,6 +151,7 @@ func (p *Profile) Vantage() model.Vantage {
 		Host: p.Host, Interface: p.Interface, MAC: p.MAC,
 		Gateway: p.Gateway, Resolvers: p.Resolvers, SearchList: p.Search,
 		Wireless: p.Wireless, Confounders: p.Confounders, OS: p.OS,
+		DHCPServer: p.DHCPServer, Instrument: p.Instrument,
 	}
 	if p.IP != nil {
 		v.IP = p.IP.String()

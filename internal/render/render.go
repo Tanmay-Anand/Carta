@@ -127,7 +127,7 @@ func AsBuilt(g *model.Graph, prof *orient.Profile) string {
 func Inventory(g *model.Graph) string {
 	var b strings.Builder
 	b.WriteString("# Device inventory\n\n")
-	fmt.Fprintf(&b, "%s · %s\n\n", g.Vantage.Prefix, g.StartedAt.Format("2 January 2006 15:04"))
+	fmt.Fprintf(&b, "%s, surveyed %s\n\n", g.Vantage.Prefix, g.StartedAt.Format("2 January 2006 15:04"))
 	b.WriteString("Confidence is shown for every identifying claim. `—` means the survey did not learn it,\n")
 	b.WriteString("which is different from the device not having one.\n\n")
 	b.WriteString("| Address | MAC | Name | Vendor | Class | Services | Evidence |\n")
