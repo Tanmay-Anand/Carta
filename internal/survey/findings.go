@@ -168,6 +168,13 @@ func findings(g *model.Graph, prof *orient.Profile, cov model.Coverage) {
 			Detail: "  - " + strings.Join(prof.Confounders, "\n  - "),
 		})
 	}
+	if stage := g.Meta["cut_short"]; stage != "" {
+		g.AddFinding(model.Finding{
+			Severity: "warn", Confidence: model.High,
+			Title:  "The survey was cut short",
+			Detail: "It stopped during the " + stage + " stage, by deadline or cancellation. Anything the later stages would have learned is unknown, not absent.",
+		})
+	}
 	if !cov.Complete() && cov.AddrsTotal > 0 {
 		g.AddFinding(model.Finding{
 			Severity: "warn", Confidence: model.High,

@@ -10,6 +10,7 @@ package survey
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -27,6 +28,20 @@ type Options struct {
 	Timeout     time.Duration
 	OUIPath     string
 	Progress    func(stage string, done, total int)
+
+	// Profile, when set, is used instead of orienting from this host. A
+	// platform whose own tools cannot be run (Android) works out where it is
+	// standing natively and hands the result in here.
+	Profile *orient.Profile
+
+	// NoARP: the vantage cannot read its ARP cache. See discover.Options.NoARP.
+	NoARP bool
+
+	// ExplicitResolverOnly skips reverse DNS when the profile names no
+	// resolver, instead of falling back to the platform's default resolver,
+	// which on Android has no resolv.conf to read and with Private DNS would
+	// ask a public resolver that knows nothing about this LAN.
+	ExplicitResolverOnly bool
 }
 
 // stage announces a phase boundary through the same channel as progress, so a
@@ -39,11 +54,30 @@ func (o Options) stage(name string) {
 }
 
 // Run performs a complete survey and returns the model it built.
+//
+// A survey cut short by its context — a deadline or a cancellation — is not an
+// error. Whatever was found is returned, the coverage says where the survey
+// stopped, and the stages that would have emitted more traffic do not run.
 func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error) {
 	opt.stage("orient")
-	prof, err := orient.Run(ctx)
-	if err != nil {
-		return nil, nil, err
+	prof := opt.Profile
+	if prof == nil {
+		var err error
+		if prof, err = orient.Run(ctx); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	// cutAt records the first stage that found the context already done.
+	var cutAt string
+	reached := func(stage string) bool {
+		if ctx.Err() != nil {
+			if cutAt == "" {
+				cutAt = stage
+			}
+			return false
+		}
+		return true
 	}
 
 	g := model.NewGraph(time.Now().UTC().Format("20060102T150405Z"))
@@ -61,6 +95,7 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 		dopt.Timeout = opt.Timeout
 	}
 	dopt.Passive = opt.Passive
+	dopt.NoARP = opt.NoARP
 	if opt.Progress != nil {
 		dopt.Progress = func(done, total int, stage string) { opt.Progress(stage, done, total) }
 	}
@@ -74,28 +109,22 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 		protocols []string
 	)
 	opt.stage("listen")
-	wg.Add(2)
-	go func() {
-		defer wg.Done()
-		p := discover.MDNS(ctx, g, 6*time.Second)
-		mu.Lock()
-		protocols = append(protocols, p...)
-		mu.Unlock()
-	}()
-	go func() {
-		defer wg.Done()
-		p := discover.SSDP(ctx, g, 6*time.Second)
-		mu.Lock()
-		protocols = append(protocols, p...)
-		mu.Unlock()
-	}()
+	if reached("listen") {
+		listen(ctx, g, &wg, &mu, &protocols)
+	}
 
 	opt.stage("sweep")
+	reached("sweep")
 	cov := discover.Sweep(ctx, g, prof, dopt)
 	wg.Wait()
+	if ctx.Err() != nil && cutAt == "" {
+		cutAt = "sweep"
+	}
 
 	cov.Protocols = append(cov.Protocols, protocols...)
-	cov.Protocols = append(cov.Protocols, "arp-cache")
+	if !opt.NoARP {
+		cov.Protocols = append(cov.Protocols, "arp-cache")
+	}
 
 	// Everything from here on only makes sense against addresses that answered
 	// something, so the target list is derived from the model rather than from
@@ -111,17 +140,39 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 
 	if !opt.Passive {
 		opt.stage("probe")
-		discover.Probe(ctx, g, targets, dopt)
+		if reached("probe") {
+			discover.Probe(ctx, g, targets, dopt)
+		}
 		opt.stage("nbns")
-		if p := discover.NetBIOS(ctx, g, targets, dopt.Timeout); len(p) > 0 {
-			cov.Protocols = append(cov.Protocols, p...)
+		if reached("nbns") {
+			if p := discover.NetBIOS(ctx, g, targets, dopt.Timeout); len(p) > 0 {
+				cov.Protocols = append(cov.Protocols, p...)
+			}
 		}
 		opt.stage("rdns")
-		found, asked := discover.ReverseDNS(ctx, g, targets, prof.Resolvers, dopt.Timeout)
-		cov.Protocols = append(cov.Protocols, "rdns")
-		if asked > 0 {
-			g.Meta["ptr_coverage"] = fmt.Sprintf("%d/%d", found, asked)
+		switch {
+		case !reached("rdns"):
+		case opt.ExplicitResolverOnly && len(prof.Resolvers) == 0:
+			cov.Notes = append(cov.Notes, "reverse DNS skipped: this vantage reported no DNS server to ask")
+		default:
+			found, asked := discover.ReverseDNS(ctx, g, targets, prof.Resolvers, dopt.Timeout)
+			cov.Protocols = append(cov.Protocols, "rdns")
+			if asked > 0 {
+				g.Meta["ptr_coverage"] = fmt.Sprintf("%d/%d", found, asked)
+			}
 		}
+	}
+	if ctx.Err() != nil && cutAt == "" {
+		cutAt = "rdns"
+	}
+	if cutAt != "" {
+		why := "cancelled"
+		if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+			why = "deadline reached"
+		}
+		cov.Notes = append(cov.Notes, fmt.Sprintf(
+			"survey cut short (%s) during %s: later stages did not run or did not finish, so what is missing here was not looked for", why, cutAt))
+		g.Meta["cut_short"] = cutAt
 	}
 
 	opt.stage("resolve")
@@ -151,6 +202,25 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 	findings(g, prof, cov)
 	g.Sort()
 	return g, prof, nil
+}
+
+// listen starts mDNS and SSDP listening, to run alongside the sweep.
+func listen(ctx context.Context, g *model.Graph, wg *sync.WaitGroup, mu *sync.Mutex, protocols *[]string) {
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		p := discover.MDNS(ctx, g, 6*time.Second)
+		mu.Lock()
+		*protocols = append(*protocols, p...)
+		mu.Unlock()
+	}()
+	go func() {
+		defer wg.Done()
+		p := discover.SSDP(ctx, g, 6*time.Second)
+		mu.Lock()
+		*protocols = append(*protocols, p...)
+		mu.Unlock()
+	}()
 }
 
 func tierLabel(passive bool) string {

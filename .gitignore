@@ -11,3 +11,15 @@ carta-surveys/
 /carta
 /carta.exe
 /dist/
+
+# Android. The .aar is built from the Go sources by the bindGo Gradle task on
+# every build that needs it; a committed copy would drift from them silently.
+android/app/libs/
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/keystore.properties
+*.jks
+*.keystore
+android/.kotlin/

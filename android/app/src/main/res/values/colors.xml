@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The same tokens as internal/ui/assets/app.css, so the native chrome and the
+     WebView it frames read as one surface. docs/DESIGN_SYSTEM_CARTA_MOBILE.md is the
+     reference; change a value there, here and in app.css together. -->
+<resources>
+    <color name="bg">#FBFBF9</color>
+    <color name="fg">#16181D</color>
+    <color name="dim">#6B7280</color>
+    <color name="rule">#E3E3DE</color>
+    <color name="panel">#FFFFFF</color>
+    <color name="accent">#0969DA</color>
+    <color name="warn">#B54708</color>
+    <color name="risk">#B42318</color>
+    <color name="icon_background">#FBFBF9</color>
+    <!-- On inverse surfaces (the snackbar) the accent comes from the other
+         theme, so it stays readable on the inverted background. -->
+    <color name="accent_inverse">#58A6FF</color>
+</resources>

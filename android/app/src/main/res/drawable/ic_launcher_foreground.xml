@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The adaptive-icon canvas is 108dp and only the middle 66dp is safe from
+     the launcher's mask, so the mark is inset by a quarter on every side. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:inset="27%">
+    <bitmap android:src="@drawable/carta_logo" android:gravity="fill" />
+</inset>

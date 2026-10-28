@@ -128,6 +128,27 @@ runs on the most durable identity available (burned-in MAC, then hostname, then
 address) and each match records which one it used. Randomised MAC addresses are
 explicitly *not* used to match, because a phone regenerates one per network.
 
+## On a phone
+
+`android/` is a prototype Android app. It runs the same Go core as the CLI, bound with gomobile,
+and shows the result in the same UI, laid out for a phone. A phone is a weaker instrument than a
+laptop, and the app says so rather than hiding it:
+
+- **No layer-2 evidence.** Android hides the ARP cache and other devices' MAC addresses from apps.
+  So the app never confirms a device at layer 2 and never looks up a vendor from a MAC. Every
+  survey's coverage and findings say this.
+- **It refuses some networks.** It surveys only the Wi-Fi or Ethernet network it is attached to.
+  It won't survey over a mobile carrier's network or while a VPN is on, because then it can't be
+  sure which network its probes reach.
+- **You pick the drift baseline.** Without MAC addresses or an SSID, Carta can't tell two networks
+  apart reliably. Two homes on `192.168.1.0/24` look alike. So the operator chooses which earlier
+  survey to compare against, and drift warns when the gateway, DHCP server, DNS servers or
+  instrument differ.
+
+Releases are signed APKs on GitHub Releases, and [Obtainium](https://github.com/ImranR98/Obtainium)
+installs and updates them on the phone. See [docs/RELEASING.md](docs/RELEASING.md) for releasing,
+and [docs/DESIGN_SYSTEM_CARTA_MOBILE.md](docs/DESIGN_SYSTEM_CARTA_MOBILE.md) for the design system.
+
 ## Install
 
 ```bash
@@ -224,6 +245,13 @@ Honest about its own coverage, since that is the whole point:
   networks. Pass `--oui` with the IEEE registry for full coverage.
 
 ## Tests
+
+```bash
+go test ./...
+```
+
+The Android binding is its own Go module, so the command above doesn't reach it. Run its tests
+from `mobile/`:
 
 ```bash
 go test ./...
