@@ -145,7 +145,7 @@ func mermaidLabel(e *model.Entity) string {
 	var bottom string
 	switch {
 	case class != "" && vendor != "":
-		bottom = vendor + " · " + class
+		bottom = vendor + ", " + class
 	case class != "":
 		bottom = class
 	case vendor != "":
@@ -156,7 +156,7 @@ func mermaidLabel(e *model.Entity) string {
 
 	label := mermaidEscape(top) + "<br/><small>" + mermaidEscape(bottom)
 	if host != "" {
-		label += " · " + hostConf.Label()
+		label += " (" + hostConf.Label() + ")"
 	}
 	if host != "" && addr != "—" {
 		label += "<br/>" + addr
@@ -220,9 +220,9 @@ func Drift(r drift.Report) string {
 		for _, c := range rows {
 			switch c.Kind {
 			case "moved":
-				fmt.Fprintf(&b, "- **%s** — `%s` → `%s` (matched by %s)\n", escape(c.Entity), c.Was, c.Now, c.MatchedBy)
+				fmt.Fprintf(&b, "- **%s** — `%s` → `%s` (matched by %s, %s)\n", escape(c.Entity), c.Was, c.Now, c.MatchedBy, c.Match)
 			case "mutated":
-				fmt.Fprintf(&b, "- **%s** (matched by %s)\n", escape(c.Entity), c.MatchedBy)
+				fmt.Fprintf(&b, "- **%s** (matched by %s, %s)\n", escape(c.Entity), c.MatchedBy, c.Match)
 				for _, d := range c.Details {
 					fmt.Fprintf(&b, "  - %s\n", escape(d))
 				}

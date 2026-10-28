@@ -246,6 +246,22 @@ type Vantage struct {
 	Wireless    string   `json:"wireless,omitempty"` // SSID, if associated
 	Confounders []string `json:"confounders,omitempty"`
 	OS          string   `json:"os"`
+	DHCPServer  string   `json:"dhcp_server,omitempty"`
+
+	// Instrument names what took the survey ("carta-cli", "carta-android").
+	// Two instruments on the same network see different things — a phone
+	// cannot read the ARP cache a laptop can — so comparing their surveys
+	// produces churn that is a property of the instruments, not the network.
+	Instrument string `json:"instrument,omitempty"`
+}
+
+// InstrumentName is Instrument with the default filled in: snapshots written
+// before the field existed were all taken by the CLI.
+func (v Vantage) InstrumentName() string {
+	if v.Instrument == "" {
+		return "carta-cli"
+	}
+	return v.Instrument
 }
 
 // Finding is a health or hygiene observation about the network as a whole

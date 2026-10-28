@@ -3,6 +3,11 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Everything rendered here came off an untrusted network. The policy is the
+     backstop for esc(): even text that slipped through could not load or run
+     anything that is not one of these files. -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'" />
 <title>carta — network survey</title>
 <!-- Served from the binary like everything else here: the UI must render the
      same on an air-gapped machine as on a connected one. -->
@@ -24,24 +29,35 @@
 
   <main>
     <section class="graph">
-      <canvas id="map"></canvas>
+      <!-- The map is a picture a screen reader cannot walk, so the first thing
+           it reaches is a way past it to the same devices as a list. -->
+      <a class="skip" href="#list" id="skip">Skip the map: list every device</a>
+      <canvas id="map" role="img" aria-label="Network map"></canvas>
+      <button class="legendbtn" id="legendbtn" aria-expanded="false" aria-controls="legendcard">Legend</button>
+      <div class="legendcard hidden" id="legendcard"></div>
       <!-- Coverage is drawn as a bar under the map rather than buried in a
            report: the proportion of the address range that never answered is
            the first thing that should qualify what the picture shows. -->
       <div class="coverage" id="coverage"></div>
     </section>
 
-    <aside class="panel">
-      <nav class="tabs">
-        <button data-tab="device" class="on">Device</button>
-        <button data-tab="findings">Findings</button>
-        <button data-tab="list">All</button>
-      </nav>
-      <div class="tabbody" id="device">
-        <p class="hint">Select a device on the map.</p>
+    <aside class="panel" id="panel">
+      <div class="grip" id="grip">
+        <button class="handle" id="handle" aria-expanded="false" aria-label="Details panel"><span></span></button>
+        <div class="panelhead" id="panelhead"></div>
       </div>
-      <div class="tabbody hidden" id="findings"></div>
-      <div class="tabbody hidden" id="list"></div>
+      <nav class="tabs" role="tablist" aria-label="Survey details">
+        <button role="tab" id="tab-device" aria-controls="device" aria-selected="true" data-tab="device" class="on">Device</button>
+        <button role="tab" id="tab-findings" aria-controls="findings" aria-selected="false" tabindex="-1" data-tab="findings">Findings</button>
+        <button role="tab" id="tab-list" aria-controls="list" aria-selected="false" tabindex="-1" data-tab="list">All</button>
+        <button role="tab" id="tab-drift" aria-controls="drift" aria-selected="false" tabindex="-1" data-tab="drift" class="hidden">Drift</button>
+      </nav>
+      <div class="tabbody" id="device" role="tabpanel" aria-labelledby="tab-device" tabindex="0">
+        <p class="hint">Select a device on the map, or open the All tab.</p>
+      </div>
+      <div class="tabbody hidden" id="findings" role="tabpanel" aria-labelledby="tab-findings" tabindex="0"></div>
+      <div class="tabbody hidden" id="list" role="tabpanel" aria-labelledby="tab-list" tabindex="0"></div>
+      <div class="tabbody hidden" id="drift" role="tabpanel" aria-labelledby="tab-drift" tabindex="0"></div>
     </aside>
   </main>
 

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Carta</string>
+    <string name="brand">CARTA</string>
+
+    <string name="survey">Survey</string>
+    <string name="cancel">Stop</string>
+    <string name="compare">Compare</string>
+
+    <string name="empty_title">No survey yet</string>
+    <string name="empty_body">Join the Wi-Fi network you want to document, then tap Survey. Carta probes only that network, takes up to four minutes, and keeps the result on this phone.\n\nIt cannot see everything a laptop can: Android hides the ARP cache and other devices\' hardware addresses from apps. Each survey records what it could not see.</string>
+
+    <string name="status_idle">Ready</string>
+    <string name="status_stage">%1$s…</string>
+    <string name="status_progress">%1$s %2$d of %3$d</string>
+    <string name="status_stopping">Stopping…</string>
+    <string name="status_done">%1$d devices on %2$s, at %3$s</string>
+    <string name="status_cut_short">%1$d devices on %2$s, stopped during %3$s</string>
+    <string name="status_failed">The survey could not run: %1$s</string>
+    <string name="tag_stopped_early">STOPPED EARLY</string>
+
+    <string name="refusal_vpn_title">A VPN is on</string>
+    <string name="refusal_vpn_next">Turn the VPN off, then tap Survey again.</string>
+    <string name="refusal_vpn_action">VPN settings</string>
+    <string name="refusal_not_local_title">Not on a local network</string>
+    <string name="refusal_not_local_next">Join the Wi-Fi network you want to document, then tap Survey again.</string>
+    <string name="refusal_no_ipv4_title">No IPv4 address</string>
+    <string name="refusal_no_ipv4_next">Try another network, or reconnect to this one, then tap Survey again.</string>
+    <string name="refusal_offline_title">Not connected</string>
+    <string name="refusal_offline_next">Join the Wi-Fi network you want to document, then tap Survey again.</string>
+    <string name="refusal_wifi_action">Wi-Fi settings</string>
+    <string name="refusal_back">Show last survey</string>
+
+    <string name="compare_title">Compare with an earlier survey</string>
+    <string name="compare_none">There is no earlier survey to compare with.</string>
+    <string name="compare_hint">Pick the survey of the same network. Nothing here proves it is the same one: two homes on 192.168.1.0/24 look alike. Values that differ from this survey are marked.</string>
+    <string name="compare_clear">Clear comparison</string>
+    <string name="compare_failed">The comparison failed: %1$s</string>
+    <string name="compare_devices">%1$d devices</string>
+    <string name="compare_view">View</string>
+    <string name="tag_other_instrument">%1$s</string>
+
+    <string name="stage_orient">Orienting</string>
+    <string name="stage_listen">Listening</string>
+    <string name="stage_sweep">Sweeping</string>
+    <string name="stage_probe">Probing services</string>
+    <string name="stage_nbns">Asking NetBIOS</string>
+    <string name="stage_rdns">Reverse DNS</string>
+    <string name="stage_resolve">Resolving</string>
+</resources>

@@ -1,0 +1,107 @@
+# Publishes a signed APK to GitHub Releases whenever a version tag is pushed.
+# Obtainium on the phone watches those releases and offers a one-tap update.
+#
+#   git tag v0.2.0 && git push origin v0.2.0
+#
+# One-time setup: the four signing secrets below (docs/RELEASING.md). Every
+# APK is signed with the same key, so each one installs over the last.
+
+name: Release Android
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # Obtainium compares the release tag with the installed versionName, so a
+      # tag that disagrees with version.properties would offer an update that
+      # never ends.
+      - name: Tag must match android/version.properties
+        run: |
+          VERSION=$(sed -n 's/^versionName=//p' android/version.properties)
+          if [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match android/version.properties versionName $VERSION"
+            exit 1
+          fi
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Test the core and the binding
+        run: |
+          go vet ./... && go test -race ./...
+          cd mobile && go vet ./... && go test ./...
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      # The action's default package list still names "tools", which the SDK
+      # repository no longer has, so sdkmanager fails unless we name our own.
+      - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
+
+      - name: Install the NDK and gomobile
+        run: |
+          sdkmanager --install "ndk;28.2.13676358" "platforms;android-36"
+          cd mobile
+          go install golang.org/x/mobile/cmd/gomobile golang.org/x/mobile/cmd/gobind
+          gomobile init
+
+      - name: Decode the signing key
+        env:
+          CARTA_KEYSTORE_B64: ${{ secrets.CARTA_KEYSTORE_B64 }}
+        run: |
+          if [ -z "$CARTA_KEYSTORE_B64" ]; then
+            echo "::error::Repository secret CARTA_KEYSTORE_B64 is not set (docs/RELEASING.md)"
+            exit 1
+          fi
+          echo "$CARTA_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/carta.jks"
+
+      # bindGo runs inside this build: Gradle rebuilds the .aar from the Go
+      # sources, so the APK can never pair the Kotlin shell with a stale core.
+      - name: Build the release APK
+        working-directory: android
+        env:
+          CARTA_KEYSTORE_PATH: ${{ runner.temp }}/carta.jks
+          CARTA_KEYSTORE_PASSWORD: ${{ secrets.CARTA_KEYSTORE_PASSWORD }}
+          CARTA_KEY_ALIAS: ${{ secrets.CARTA_KEY_ALIAS }}
+          CARTA_KEY_PASSWORD: ${{ secrets.CARTA_KEY_PASSWORD }}
+        run: bash ./gradlew --no-daemon assembleRelease
+
+      - name: Verify the signature
+        run: |
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -n 1)
+          "$APKSIGNER" verify --print-certs android/app/build/outputs/apk/release/app-release.apk
+          cp android/app/build/outputs/apk/release/app-release.apk "carta-$GITHUB_REF_NAME.apk"
+          rm -f "$RUNNER_TEMP/carta.jks"
+
+      - name: Extract this version's release notes
+        run: |
+          awk -v h="## $GITHUB_REF_NAME" '$0==h{f=1;next} /^## /{if(f)exit} f' RELEASE_NOTES.md \
+            | sed '/^---$/d' > notes.md
+          if [ ! -s notes.md ]; then echo "See RELEASE_NOTES.md." > notes.md; fi
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "carta-$GITHUB_REF_NAME.apk" \
+            --title "Carta $GITHUB_REF_NAME" \
+            --notes-file notes.md

@@ -27,7 +27,8 @@ import (
 	"github.com/Tanmay-Anand/carta/internal/drift"
 	"github.com/Tanmay-Anand/carta/internal/model"
 	"github.com/Tanmay-Anand/carta/internal/render"
-	"github.com/Tanmay-Anand/carta/internal/store"
+	"github.com/Tanmay-Anand/carta/internal/store/snapshot"
+	"github.com/Tanmay-Anand/carta/internal/store/sqlitedb"
 	"github.com/Tanmay-Anand/carta/internal/survey"
 	"github.com/Tanmay-Anand/carta/internal/ui"
 )
@@ -135,10 +136,10 @@ func cmdSurvey(ctx context.Context, args []string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := store.WriteSnapshot(filepath.Join(dir, "survey.json"), g); err != nil {
+	if err := snapshot.Write(filepath.Join(dir, "survey.json"), g); err != nil {
 		return err
 	}
-	if err := store.WriteDB(filepath.Join(dir, "survey.db"), g); err != nil {
+	if err := sqlitedb.Write(filepath.Join(dir, "survey.db"), g); err != nil {
 		return err
 	}
 	pack, err := render.Pack(dir, g, prof)
@@ -150,7 +151,7 @@ func cmdSurvey(ctx context.Context, args []string) error {
 	// next run has something to diff against without the operator having to
 	// remember a filename.
 	baseline := filepath.Join(*out, "baseline.json")
-	if prev, err := store.ReadSnapshot(baseline); err == nil {
+	if prev, err := snapshot.Read(baseline); err == nil {
 		rep := drift.Compare(prev, g)
 		if err := os.WriteFile(filepath.Join(dir, "drift.md"), []byte(render.Drift(rep)), 0o644); err != nil {
 			return err
@@ -158,7 +159,7 @@ func cmdSurvey(ctx context.Context, args []string) error {
 		pack = append(pack, filepath.Join(dir, "drift.md"))
 		fmt.Fprintln(os.Stderr, "\n"+rep.Summary())
 	}
-	if err := store.WriteSnapshot(baseline, g); err != nil {
+	if err := snapshot.Write(baseline, g); err != nil {
 		return err
 	}
 
@@ -198,7 +199,7 @@ func printSummary(g *model.Graph) {
 			classes[class]++
 		}
 	}
-	fmt.Fprintf(os.Stderr, "\n  %d devices  ·  %d named  ·  %d unidentified\n", live, named, unidentified)
+	fmt.Fprintf(os.Stderr, "\n  %d devices, %d named, %d unidentified\n", live, named, unidentified)
 
 	keys := make([]string, 0, len(classes))
 	for k := range classes {
@@ -224,15 +225,15 @@ func cmdDiff(args []string) error {
 	if fs.NArg() < 1 {
 		return fmt.Errorf("usage: carta diff BASELINE.json [CURRENT.json]")
 	}
-	before, err := store.ReadSnapshot(fs.Arg(0))
+	before, err := snapshot.Read(fs.Arg(0))
 	if err != nil {
 		return err
 	}
 	var after *model.Graph
 	if fs.NArg() >= 2 {
-		after, err = store.ReadSnapshot(fs.Arg(1))
+		after, err = snapshot.Read(fs.Arg(1))
 	} else {
-		after, err = store.ReadSnapshot(filepath.Join(filepath.Dir(fs.Arg(0)), "baseline.json"))
+		after, err = snapshot.Read(filepath.Join(filepath.Dir(fs.Arg(0)), "baseline.json"))
 	}
 	if err != nil {
 		return err
@@ -252,7 +253,7 @@ func cmdUI(ctx context.Context, args []string) error {
 	if path == "" {
 		path = filepath.Join("carta-surveys", "baseline.json")
 	}
-	g, err := store.ReadSnapshot(path)
+	g, err := snapshot.Read(path)
 	if err != nil {
 		return fmt.Errorf("%s: %w (run `carta survey` first)", path, err)
 	}

@@ -13,6 +13,11 @@ let links = [];
 let selected = null;
 let view = { x: 0, y: 0, k: 1 };
 
+// ?embedded: shown inside a host app that draws its own branded chrome.
+if (new URLSearchParams(location.search).has('embedded')) {
+  document.body.classList.add('embedded');
+}
+
 const canvas = document.getElementById('map');
 const ctx = canvas.getContext('2d');
 
@@ -25,7 +30,25 @@ fetch('api/survey').then(r => r.json()).then(data => {
   renderCoverage();
   renderFindings();
   renderList();
+  // The vantage and coverage text just changed the sheet's peek height.
+  // Re-measure here rather than trust a resize callback, which a page that is
+  // not being drawn (a background tab) never gets.
+  if (sheetMode) {
+    measureSheet();
+    setSheet(sheet.state, false);
+    if (!userMoved) fit();
+    draw();
+  }
 });
+
+// Drift is optional: only a host that was asked to compare two surveys serves
+// it, and the tab stays hidden everywhere else.
+fetch('api/drift').then(r => r.ok ? r.json() : null).then(d => {
+  if (!d) return;
+  renderDrift(d);
+  // ?tab=drift: the host just ran a comparison and the answer is the point.
+  if (new URLSearchParams(location.search).get('tab') === 'drift') showTab('drift');
+}).catch(() => {});
 
 /* ---------- model → drawable ---------- */
 
@@ -53,6 +76,10 @@ function build() {
     .filter(l => l.a && l.b && l.a !== l.b);
 
   for (const n of nodes) n.r = n.kind === 'infra' ? 13 : 9;
+
+  const prefix = (survey.vantage || {}).prefix || 'this network';
+  canvas.setAttribute('aria-label',
+    `Map of ${nodes.length} ${nodes.length === 1 ? 'device' : 'devices'} on ${prefix}. The All tab lists them.`);
 }
 
 function best(e, key) {
@@ -164,7 +191,9 @@ let fitted = false;
 let userMoved = false;
 
 function fit() {
-  const w = canvas.clientWidth, h = canvas.clientHeight;
+  // In the sheet layout the panel's peek covers the bottom of the canvas, so
+  // the map is framed in the part that is actually visible.
+  const w = canvas.clientWidth, h = canvas.clientHeight - mapInset();
   if (!nodes.length || w < 2 || h < 2) return false;
 
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
@@ -200,6 +229,14 @@ function draw() {
     dim: css.getPropertyValue('--dim').trim(),
     fg: css.getPropertyValue('--fg').trim(),
   };
+  // The canvas cannot read a CSS variable in ctx.font, so the stack is copied
+  // out of the stylesheet: the map's labels use the same bundled face as the
+  // rest of the page.
+  const mono = css.getPropertyValue('--mono').trim();
+  // Canvas text ignores the reader's text size; the page's root font size
+  // carries it (a browser setting, or Android's font scale in the WebView), so
+  // the labels follow it too.
+  const zoom = Math.max(1, parseFloat(css.fontSize) / 16 || 1);
 
   ctx.save();
   ctx.translate(view.x, view.y);
@@ -244,25 +281,41 @@ function draw() {
       ctx.stroke();
     }
 
-    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+    ctx.font = `${11 * zoom}px ${mono}`;
     ctx.fillStyle = n.kind === 'unknown' ? colour.dim : colour.fg;
     ctx.textAlign = 'center';
-    ctx.fillText(n.label, n.x, n.y + n.r + 13);
+    ctx.fillText(n.label, n.x, n.y + n.r + 13 * zoom);
 
-    ctx.font = '9px ui-monospace, Menlo, Consolas, monospace';
+    ctx.font = `${9 * zoom}px ${mono}`;
     ctx.fillStyle = colour.dim;
-    ctx.fillText(n.sub, n.x, n.y + n.r + 24);
+    ctx.fillText(n.sub, n.x, n.y + n.r + 24 * zoom);
   }
   ctx.restore();
 }
 
 /* ---------- interaction ---------- */
 
+// Pointer events rather than mouse events, so the same code handles a mouse,
+// a finger and a pen. Two fingers on the canvas pinch-zoom.
 let dragging = null, panning = null;
+const pointers = new Map();
+let pinch = null;
 
-canvas.addEventListener('mousedown', ev => {
+canvas.addEventListener('pointerdown', ev => {
+  // Capture keeps a drag alive when the finger leaves the canvas; it throws for
+  // a pointer the browser no longer tracks, which must not cost the gesture.
+  try { canvas.setPointerCapture(ev.pointerId); } catch (_) {}
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pointers.size === 2) {
+    dragging = null; panning = null;
+    pinch = { d: pinchDistance(), k: view.k };
+    userMoved = true;
+    return;
+  }
   const p = toModel(ev);
-  const hit = nodes.find(n => Math.hypot(n.x - p.x, n.y - p.y) < n.r + 6);
+  // A fingertip is far less precise than a cursor, so a touch hits wider.
+  const slop = ev.pointerType === 'touch' ? 18 : 6;
+  const hit = nodes.find(n => Math.hypot(n.x - p.x, n.y - p.y) < n.r + slop);
   if (hit) {
     dragging = hit;
     select(hit);
@@ -272,8 +325,14 @@ canvas.addEventListener('mousedown', ev => {
   }
 });
 
-window.addEventListener('mousemove', ev => {
-  if (dragging) {
+canvas.addEventListener('pointermove', ev => {
+  if (!pointers.has(ev.pointerId)) return;
+  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch && pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    const rect = canvas.getBoundingClientRect();
+    zoomAt((a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top, pinch.k * pinchDistance() / pinch.d / view.k);
+  } else if (dragging) {
     const p = toModel(ev);
     dragging.x = p.x; dragging.y = p.y;
     draw();
@@ -284,18 +343,31 @@ window.addEventListener('mousemove', ev => {
   }
 });
 
-window.addEventListener('mouseup', () => { dragging = null; panning = null; });
+function endPointer(ev) {
+  pointers.delete(ev.pointerId);
+  if (pointers.size < 2) pinch = null;
+  if (pointers.size === 0) { dragging = null; panning = null; }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
 
-canvas.addEventListener('wheel', ev => {
-  ev.preventDefault();
-  userMoved = true;
-  const factor = ev.deltaY < 0 ? 1.1 : 0.9;
-  const rect = canvas.getBoundingClientRect();
-  const mx = ev.clientX - rect.left, my = ev.clientY - rect.top;
+function pinchDistance() {
+  const [a, b] = [...pointers.values()];
+  return Math.max(Math.hypot(a.x - b.x, a.y - b.y), 1);
+}
+
+function zoomAt(mx, my, factor) {
   view.x = mx - (mx - view.x) * factor;
   view.y = my - (my - view.y) * factor;
   view.k *= factor;
   draw();
+}
+
+canvas.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  userMoved = true;
+  const rect = canvas.getBoundingClientRect();
+  zoomAt(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.1 : 0.9);
 }, { passive: false });
 
 // A canvas that gains its size after load — a hidden pane being shown, a split
@@ -305,6 +377,14 @@ new ResizeObserver(() => {
   if (!userMoved) fit();
   draw();
 }).observe(canvas);
+
+// The bundled face loads after the first paint (font-display: swap), and a
+// canvas does not repaint itself when it arrives.
+// It also reflows the sheet's head, so the peek height is measured again.
+if (document.fonts) document.fonts.addEventListener('loadingdone', () => {
+  if (sheetMode) { measureSheet(); setSheet(sheet.state, false); }
+  draw();
+});
 
 window.addEventListener('resize', () => {
   if (!userMoved) fit();
@@ -319,35 +399,238 @@ function toModel(ev) {
   };
 }
 
-function select(node) {
+// focusPanel: the choice came from the keyboard or the list, so focus follows
+// it to the device's details instead of staying on a row that is now hidden.
+function select(node, focusPanel) {
   selected = node;
   renderDevice(node.e);
   showTab('device');
+  if (sheetMode && sheet.state === 'peek') setSheet('half', true);
+  keepVisible(node);
+  draw();
+  if (focusPanel) document.getElementById('device').focus();
+}
+
+/* ---------- layout: compact and sheet ----------
+
+   compact (?embedded, or a narrow window): the vantage line goes to the
+   panel's head and the legend behind a button on the map, so the header no
+   longer eats the map's height.
+
+   sheet (a narrow window): the map is full-bleed and the panel slides over it,
+   snapping to peek (handle, head, tabs), half or full. Only the grip — the
+   handle and the head — drags the sheet: the canvas keeps pan and pinch, and
+   the panel's body scrolls.
+
+   The elements are moved, not duplicated, so there is one vantage line and one
+   legend whichever layout is showing. */
+
+const narrow = matchMedia('(max-width: 760px)');
+let compact = false, sheetMode = false;
+const panel = document.getElementById('panel');
+const grip = document.getElementById('grip');
+const handle = document.getElementById('handle');
+const sheet = { state: 'peek', heights: { peek: 0, half: 0, full: 0 } };
+const SHEET_STATES = ['peek', 'half', 'full'];
+
+function arrange() {
+  compact = document.body.classList.contains('embedded') || narrow.matches;
+  sheetMode = narrow.matches;
+  document.body.classList.toggle('compact', compact);
+  document.body.classList.toggle('sheet', sheetMode);
+
+  const bar = document.querySelector('.bar');
+  const head = document.getElementById('panelhead');
+  const vantage = document.getElementById('vantage');
+  const legend = document.querySelector('.legend');
+  const coverage = document.getElementById('coverage');
+  if (compact) {
+    head.prepend(vantage);
+    document.getElementById('legendcard').append(legend);
+  } else {
+    bar.querySelector('.brand').after(vantage);
+    vantage.after(legend);
+    showLegend(false);
+  }
+  if (sheetMode) head.append(coverage);
+  else document.querySelector('.graph').append(coverage);
+
+  if (sheetMode) {
+    measureSheet();
+    setSheet(sheet.state, false);
+  } else {
+    panel.style.transform = '';
+    panel.style.height = '';
+  }
+  if (!userMoved) fitted = false;
   draw();
 }
+
+function measureSheet() {
+  const h = document.querySelector('main').clientHeight;
+  const peek = grip.offsetHeight + document.querySelector('.tabs').offsetHeight;
+  sheet.heights = {
+    peek,
+    half: Math.max(peek, Math.round(h * 0.5)),
+    full: Math.max(peek, h - 16),
+  };
+  panel.style.height = sheet.heights.full + 'px';
+}
+
+function setSheet(state, animate) {
+  sheet.state = state;
+  panel.classList.toggle('animating', !!animate);
+  panel.style.transform = 'translateY(' + (sheet.heights.full - sheet.heights[state]) + 'px)';
+  handle.setAttribute('aria-expanded', state !== 'peek');
+  handle.setAttribute('aria-label', 'Details panel, ' +
+    (state === 'peek' ? 'collapsed' : state === 'half' ? 'half open' : 'open'));
+}
+
+function mapInset() {
+  return sheetMode ? sheet.heights.peek : 0;
+}
+
+// A selected node must not end up under the sheet that just rose to show it.
+function keepVisible(node) {
+  if (!sheetMode) return;
+  const visible = canvas.clientHeight - sheet.heights[sheet.state];
+  const y = view.y + node.y * view.k;
+  if (y > visible - 40 || y < 20) {
+    view.y += visible / 2 - y;
+    userMoved = true;
+  }
+}
+
+let sheetDrag = null, sheetJustDragged = false;
+
+grip.addEventListener('pointerdown', ev => {
+  if (!sheetMode) return;
+  const offset = sheet.heights.full - sheet.heights[sheet.state];
+  sheetDrag = { y0: ev.clientY, offset0: offset, offset, moved: false, lastY: ev.clientY, lastT: performance.now(), v: 0 };
+  try { grip.setPointerCapture(ev.pointerId); } catch (_) {}
+});
+
+grip.addEventListener('pointermove', ev => {
+  const d = sheetDrag;
+  if (!d) return;
+  const dy = ev.clientY - d.y0;
+  // A few pixels of wobble is a tap on the handle, not a drag.
+  if (!d.moved && Math.abs(dy) < 6) return;
+  d.moved = true;
+  panel.classList.remove('animating');
+  const max = sheet.heights.full - sheet.heights.peek;
+  d.offset = Math.min(max, Math.max(0, d.offset0 + dy));
+  panel.style.transform = 'translateY(' + d.offset + 'px)';
+  const now = performance.now();
+  if (now > d.lastT) d.v = (ev.clientY - d.lastY) / (now - d.lastT);
+  d.lastY = ev.clientY;
+  d.lastT = now;
+});
+
+// On release the sheet settles at the nearest height, or — after a flick —
+// at the next height in the flick's direction from where the finger let go.
+function endSheetDrag() {
+  const d = sheetDrag;
+  sheetDrag = null;
+  if (!d || !d.moved) return;
+  sheetJustDragged = true;
+  setTimeout(() => { sheetJustDragged = false; }, 0);
+  const shown = sheet.heights.full - d.offset;
+  let target = nearestState(shown);
+  if (d.v < -0.5) target = SHEET_STATES.find(st => sheet.heights[st] > shown) || 'full';
+  else if (d.v > 0.5) target = [...SHEET_STATES].reverse().find(st => sheet.heights[st] < shown) || 'peek';
+  setSheet(target, true);
+}
+grip.addEventListener('pointerup', endSheetDrag);
+grip.addEventListener('pointercancel', endSheetDrag);
+
+function nearestState(shown) {
+  return SHEET_STATES.reduce((a, b) =>
+    Math.abs(sheet.heights[b] - shown) < Math.abs(sheet.heights[a] - shown) ? b : a);
+}
+
+// The handle is a button: a tap or Enter cycles the heights, arrows step them.
+handle.addEventListener('click', () => {
+  if (sheetJustDragged) return;
+  setSheet(SHEET_STATES[(SHEET_STATES.indexOf(sheet.state) + 1) % 3], true);
+});
+handle.addEventListener('keydown', ev => {
+  const i = SHEET_STATES.indexOf(sheet.state);
+  if (ev.key === 'ArrowUp') { ev.preventDefault(); setSheet(SHEET_STATES[Math.min(2, i + 1)], true); }
+  if (ev.key === 'ArrowDown') { ev.preventDefault(); setSheet(SHEET_STATES[Math.max(0, i - 1)], true); }
+});
+
+const legendBtn = document.getElementById('legendbtn');
+function showLegend(on) {
+  document.getElementById('legendcard').classList.toggle('hidden', !on);
+  legendBtn.setAttribute('aria-expanded', on);
+}
+legendBtn.addEventListener('click', () => showLegend(legendBtn.getAttribute('aria-expanded') !== 'true'));
+
+// For a host app's Back gesture: fold whatever is open, and say whether
+// anything was. The host calls this; nothing here calls the host.
+window.carta = {
+  collapse() {
+    if (legendBtn.getAttribute('aria-expanded') === 'true') { showLegend(false); return true; }
+    if (sheetMode && sheet.state !== 'peek') { setSheet('peek', true); return true; }
+    return false;
+  },
+};
+
+narrow.addEventListener('change', arrange);
+// The peek is as tall as the grip, which grows when the survey's vantage and
+// coverage text arrive; the other heights follow the page.
+const sheetSizer = new ResizeObserver(() => {
+  if (!sheetMode) return;
+  measureSheet();
+  setSheet(sheet.state, false);
+});
+sheetSizer.observe(document.querySelector('main'));
+sheetSizer.observe(grip);
+arrange();
 
 /* ---------- panels ---------- */
 
 function renderVantage() {
   const v = survey.vantage || {};
-  document.getElementById('vantage').textContent =
-    `${v.prefix || '?'} · from ${v.ip || '?'} on ${v.interface || '?'} · ${new Date(survey.started_at).toLocaleString()}`;
+  // Three facts, kept apart by spacing rather than a separator glyph, so they
+  // can also wrap one per line on a narrow screen.
+  const el = document.getElementById('vantage');
+  el.textContent = '';
+  for (const part of [
+    v.prefix || '?',
+    `from ${v.ip || '?'} on ${v.interface || '?'}`,
+    new Date(survey.started_at).toLocaleString(),
+  ]) {
+    const span = document.createElement('span');
+    span.className = 'vpart';
+    span.textContent = part;
+    el.append(span);
+  }
 }
 
 function renderCoverage() {
   const el = document.getElementById('coverage');
   const c = (survey.coverage || [])[0];
   if (!c) { el.textContent = ''; return; }
-  const responded = c.responded || 0;
   const total = c.addrs_total || 1;
-  const pct = Math.round(responded / total * 100);
+  const swept = Math.min(c.addrs_swept ?? total, total);
+  const responded = Math.min(c.responded || 0, swept);
+  // Widths are set through the DOM, not a style attribute, so the page can run
+  // under a Content-Security-Policy that forbids inline styles.
   el.innerHTML = `
-    <div class="covbar">
-      <i class="responded" style="width:${pct}%"></i>
-      <i class="silent" style="width:${100 - pct}%"></i>
-    </div>
-    ${responded} of ${total} addresses in ${c.prefix} answered.
-    The hatched ${total - responded} did not — unknown, not empty.`;
+    <div class="covbar"><i class="responded"></i><i class="silent"></i><i class="unswept"></i></div>
+    <span class="covtext"></span>`;
+  const bar = el.querySelectorAll('.covbar i');
+  bar[0].style.width = (responded / total * 100) + '%';
+  bar[1].style.width = ((swept - responded) / total * 100) + '%';
+  bar[2].style.width = ((total - swept) / total * 100) + '%';
+  // A survey cut short has addresses it never reached, and those are a third
+  // state: not answered and not asked.
+  el.querySelector('.covtext').textContent =
+    `${responded} of ${total} addresses in ${c.prefix} answered. ` +
+    `The hatched ${swept - responded} did not — unknown, not empty.` +
+    (swept < total ? ` The open ${total - swept} were never reached: the survey was cut short.` : '');
 }
 
 function renderFindings() {
@@ -364,21 +647,25 @@ function renderFindings() {
 
 function renderList() {
   const el = document.getElementById('list');
-  el.innerHTML = '<input class="searchbox" id="q" placeholder="filter by name, address, vendor or class" />'
+  el.innerHTML = '<input class="searchbox" id="q" aria-label="Filter devices" placeholder="filter by name, address, vendor or class" />'
     + '<div id="rows"></div>';
   const rows = document.getElementById('rows');
   const paint = (filter) => {
     const f = (filter || '').toLowerCase();
     rows.innerHTML = nodes
       .filter(n => !f || rowText(n.e).toLowerCase().includes(f))
-      .map(n => `<div class="row" data-id="${esc(n.id)}">
+      .map(n => `<div class="row" role="button" tabindex="0" data-id="${esc(n.id)}">
           <span class="label">${esc(n.label)}</span>
           <span class="meta">${esc(ids(n.e, 'ip').join(' '))}<br>${esc(best(n.e, 'class') || best(n.e, 'vendor') || 'unidentified')}</span>
         </div>`).join('');
     rows.querySelectorAll('.row').forEach(r => {
-      r.onclick = () => {
+      const open = () => {
         const n = nodes.find(x => x.id === r.dataset.id);
-        if (n) select(n);
+        if (n) select(n, true);
+      };
+      r.onclick = open;
+      r.onkeydown = ev => {
+        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
       };
     });
   };
@@ -446,11 +733,71 @@ function renderDevice(e) {
 }
 
 document.querySelectorAll('.tabs button').forEach(b => {
-  b.onclick = () => showTab(b.dataset.tab);
+  b.onclick = () => {
+    showTab(b.dataset.tab);
+    // Choosing a tab on a sheet that only peeks means wanting to read it.
+    if (sheetMode && sheet.state === 'peek') setSheet('half', true);
+  };
 });
 
+// The tabs are one stop in the keyboard order (the selected one); arrows move
+// between them, as a tablist does everywhere else.
+document.querySelector('.tabs').addEventListener('keydown', ev => {
+  const tabs = [...document.querySelectorAll('.tabs button:not(.hidden)')];
+  const i = tabs.indexOf(document.activeElement);
+  if (i < 0) return;
+  const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[ev.key];
+  if (next === undefined) return;
+  ev.preventDefault();
+  const t = tabs[(next + tabs.length) % tabs.length];
+  showTab(t.dataset.tab);
+  t.focus();
+});
+
+document.getElementById('skip').addEventListener('click', ev => {
+  ev.preventDefault();
+  if (sheetMode) setSheet('full', true);
+  showTab('list');
+  document.getElementById('q')?.focus();
+});
+
+/* Drift arrives already computed: matching devices across time is the model's
+   job, not the page's. Each change shows how it was matched, because a match on
+   an address alone may be two different devices that swapped leases. */
+function renderDrift(d) {
+  const el = document.getElementById('drift');
+  const caveats = (d.caveats || []).map(c => `<p class="caveat">${esc(c)}</p>`).join('');
+  const groups = [
+    ['appeared', 'Appeared'], ['vanished', 'Vanished'], ['moved', 'Moved'], ['mutated', 'Changed'],
+  ];
+  const changes = d.changes || [];
+  const body = groups.map(([kind, title]) => {
+    const rows = changes.filter(c => c.kind === kind);
+    if (!rows.length) return '';
+    return `<h3>${title} (${rows.length})</h3>` + rows.map(c => `
+      <div class="change">
+        <span class="label">${esc(c.entity)}</span>
+        ${c.matched_by ? `<span class="conf ${esc(c.match)}">by ${esc(c.matched_by)}, ${esc(c.match)}</span>` : ''}
+        <div class="evidence">${esc(c.was ? `${c.was} → ${c.now || ''}` : (c.now || ''))}</div>
+        ${(c.details || []).map(x => `<div class="evidence">${esc(x)}</div>`).join('')}
+      </div>`).join('');
+  }).join('');
+  el.innerHTML = `
+    <p class="mono">${esc(d.before_id)} → ${esc(d.after_id)}</p>
+    ${d.comparable ? '' : '<p class="caveat strong">These surveys are not of the same network. Read the changes below as a difference between two networks.</p>'}
+    ${caveats}
+    <p>${esc(d.summary || '')}</p>
+    ${body}`;
+  document.querySelector('.tabs button[data-tab="drift"]').classList.remove('hidden');
+}
+
 function showTab(name) {
-  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === name));
+  document.querySelectorAll('.tabs button').forEach(b => {
+    const on = b.dataset.tab === name;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-selected', on);
+    b.tabIndex = on ? 0 : -1;
+  });
   document.querySelectorAll('.tabbody').forEach(d => d.classList.toggle('hidden', d.id !== name));
 }
 

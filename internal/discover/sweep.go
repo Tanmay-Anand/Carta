@@ -24,7 +24,14 @@ type Options struct {
 	Timeout     time.Duration // per-connection budget
 	Ports       []int         // TCP ports probed on every responsive address
 	Passive     bool          // emit nothing: cache and multicast reading only
-	Progress    func(done, total int, stage string)
+
+	// NoARP says the vantage cannot read its own ARP cache (Android hides it
+	// from apps). The sweep then skips everything that exists only to fill or
+	// read that cache, and says so in the coverage, rather than emitting
+	// packets whose result it can never see.
+	NoARP bool
+
+	Progress func(done, total int, stage string)
 }
 
 // DefaultOptions is tuned for a /24 on a home or branch network: fast enough to
@@ -89,7 +96,11 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 	// Everything the host already knew, recorded before we touch the wire, and
 	// marked as such: a device the host was already talking to is independent
 	// evidence, not a result of our own probing.
-	seedFromCache(g, prof)
+	if opt.NoARP {
+		cov.Notes = append(cov.Notes, "layer-2 evidence unavailable from this vantage: the ARP cache could not be read, so no device was confirmed at layer 2 and no MAC address or vendor was learned from it")
+	} else {
+		seedFromCache(g, prof)
+	}
 
 	if opt.Passive {
 		cov.Notes = append(cov.Notes, "passive profile: no packets were emitted; findings come from the host's own caches and from multicast listening")
@@ -103,7 +114,7 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, opt.Concurrency)
 	alive := make(chan liveHost, len(addrs))
-	var done int
+	var done, attempted int
 	var mu sync.Mutex
 
 	for _, ip := range addrs {
@@ -115,6 +126,9 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 			h := touch(ctx, ip, opt)
 			mu.Lock()
 			done++
+			if h.attempted {
+				attempted++
+			}
 			if opt.Progress != nil {
 				opt.Progress(done, len(addrs), "sweep")
 			}
@@ -135,7 +149,16 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 			Source: model.Source{Method: "tcp-connect", Evidence: h.evidence, At: now},
 		})
 	}
-	cov.AddrsSwept = len(addrs)
+	// Only addresses the sweep actually reached count as swept. A cancelled or
+	// deadline-cut sweep still walks the whole list, but every touch after the
+	// cut returns without sending anything, and counting those would render a
+	// partial survey as a complete one.
+	cov.AddrsSwept = attempted
+
+	if opt.NoARP {
+		cov.EndedAt = time.Now()
+		return cov
+	}
 
 	// Phase 2 — re-read the ARP cache. Addresses that now carry a MAC were
 	// resolved at layer 2 even if nothing answered at layer 3, which finds
@@ -160,6 +183,7 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 
 type liveHost struct {
 	ip        net.IP
+	attempted bool // false when the survey was cut short before this address was reached
 	responded bool
 	evidence  string
 }
@@ -168,14 +192,30 @@ type liveHost struct {
 // the first success: the goal of this phase is liveness and ARP resolution, not
 // a service inventory, and hammering every port at every address is what turns
 // a survey into something a security team has to investigate.
-func touch(ctx context.Context, ip net.IP, opt Options) liveHost {
-	h := liveHost{ip: ip}
+func touch(ctx context.Context, ip net.IP, opt Options) (h liveHost) {
+	h = liveHost{ip: ip}
+	if ctx.Err() != nil {
+		return h
+	}
+	h.attempted = true
+	// An address whose probes were cut off by the cancellation was not looked
+	// at, only started on: it counts as swept if it answered first, and not
+	// otherwise. Without this, stopping mid-sweep reports every address that
+	// happened to be in flight as covered.
+	defer func() {
+		if !h.responded && ctx.Err() != nil {
+			h.attempted = false
+		}
+	}()
 
 	// A UDP send to the discard port resolves ARP without needing anyone to
-	// answer. It cannot prove liveness, so its only job is cache warming.
-	if c, err := net.DialTimeout("udp4", net.JoinHostPort(ip.String(), "9"), opt.Timeout); err == nil {
-		_, _ = c.Write([]byte{0})
-		_ = c.Close()
+	// answer. It cannot prove liveness, so its only job is cache warming — and
+	// a vantage that cannot read the cache has no use for it.
+	if !opt.NoARP {
+		if c, err := net.DialTimeout("udp4", net.JoinHostPort(ip.String(), "9"), opt.Timeout); err == nil {
+			_, _ = c.Write([]byte{0})
+			_ = c.Close()
+		}
 	}
 
 	for _, port := range []int{80, 443, 22, 445, 8080} {

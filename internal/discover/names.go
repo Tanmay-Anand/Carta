@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/csv"
+	"errors"
 	"net"
 	"os"
 	"strings"
@@ -24,18 +25,22 @@ import (
 // PTR coverage is also a documentation-quality metric in its own right. A /24
 // with four PTR records is a network nobody is administering by name.
 func ReverseDNS(ctx context.Context, g *model.Graph, targets []string, resolvers []string, timeout time.Duration) (found, asked int) {
-	resolver := net.DefaultResolver
+	// Ask the network's resolvers directly, in the order the vantage listed
+	// them, rather than the host's stub, which may be a VPN's, a corporate
+	// split-DNS, or (Android with Private DNS) a public resolver over TLS — none
+	// of which know anything about this segment's PTR records.
+	pool := []*net.Resolver{net.DefaultResolver}
 	if len(resolvers) > 0 {
-		// Ask the network's resolver directly rather than the host's stub,
-		// which may be a VPN's or a corporate split-DNS that knows nothing
-		// about this segment.
-		addr := net.JoinHostPort(resolvers[0], "53")
-		resolver = &net.Resolver{
-			PreferGo: true,
-			Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-				d := net.Dialer{Timeout: timeout}
-				return d.DialContext(ctx, network, addr)
-			},
+		pool = pool[:0]
+		for _, r := range resolvers {
+			addr := net.JoinHostPort(r, "53")
+			pool = append(pool, &net.Resolver{
+				PreferGo: true,
+				Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+					d := net.Dialer{Timeout: timeout}
+					return d.DialContext(ctx, network, addr)
+				},
+			})
 		}
 	}
 
@@ -49,9 +54,7 @@ func ReverseDNS(ctx context.Context, g *model.Graph, targets []string, resolvers
 		go func(ip string) {
 			defer wg.Done()
 			defer func() { <-sem }()
-			c, cancel := context.WithTimeout(ctx, timeout*3)
-			defer cancel()
-			names, err := resolver.LookupAddr(c, ip)
+			names, err := lookupAddr(ctx, pool, ip, timeout*3)
 			mu.Lock()
 			asked++
 			mu.Unlock()
@@ -69,6 +72,31 @@ func ReverseDNS(ctx context.Context, g *model.Graph, targets []string, resolvers
 	}
 	wg.Wait()
 	return found, asked
+}
+
+// lookupAddr asks each resolver in turn. A resolver that answers "no such
+// name" has answered, so the next is not asked; one that times out or refuses
+// is skipped, because the first resolver a vantage lists is not always the one
+// that serves this segment.
+func lookupAddr(ctx context.Context, pool []*net.Resolver, ip string, budget time.Duration) ([]string, error) {
+	var err error
+	for _, r := range pool {
+		c, cancel := context.WithTimeout(ctx, budget)
+		var names []string
+		names, err = r.LookupAddr(c, ip)
+		cancel()
+		if err == nil {
+			return names, nil
+		}
+		var dnsErr *net.DNSError
+		if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+			return nil, err
+		}
+		if ctx.Err() != nil {
+			return nil, err
+		}
+	}
+	return nil, err
 }
 
 // OUI lookup.
