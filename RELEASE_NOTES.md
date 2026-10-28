@@ -5,7 +5,7 @@ Android app.
 
 ---
 
-## Unreleased
+## v0.1.0
 
 Rename this heading to the version number when tagging (`docs/RELEASING.md`).
 
