@@ -27,7 +27,11 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      # The action's default package list still names "tools", which the SDK
+      # repository no longer has, so sdkmanager fails unless we name our own.
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - name: Install the NDK and gomobile
         run: |
           sdkmanager --install "ndk;28.2.13676358" "platforms;android-36"
