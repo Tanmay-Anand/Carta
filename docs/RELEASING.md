@@ -35,10 +35,12 @@ and add:
 | `CARTA_KEY_ALIAS` | `carta`, or the alias you chose |
 | `CARTA_KEY_PASSWORD` | The key password |
 
-To encode the keystore for `CARTA_KEYSTORE_B64`, run this in PowerShell:
+To encode the keystore for `CARTA_KEYSTORE_B64`, run this in PowerShell, in the folder that holds
+the keystore. `Resolve-Path` matters: .NET resolves a bare file name against the process's own
+directory (often `C:\Windows\System32`), not the folder PowerShell is in.
 
 ```powershell
-[Convert]::ToBase64String([IO.File]::ReadAllBytes("carta-release.jks")) | Set-Clipboard
+[Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path "carta-release.jks"))) | Set-Clipboard
 ```
 
 On macOS or Linux, run this:
