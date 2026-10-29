@@ -7,8 +7,6 @@ Android app.
 
 ## v0.1.0
 
-Rename this heading to the version number when tagging (`docs/RELEASING.md`).
-
 **New: Carta for Android (prototype).**
 
 - Surveys the Wi-Fi or Ethernet network the phone is on, with the same Go core as the CLI. The
