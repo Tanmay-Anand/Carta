@@ -145,6 +145,18 @@ laptop, and the app says so rather than hiding it:
   survey to compare against, and drift warns when the gateway, DHCP server, DNS servers or
   instrument differ.
 
+<p align="center">
+  <img src="assets/carta-android-device.webp" width="300"
+       alt="The Android app: the survey map above, a selected device and the evidence for each claim in a sheet below, and the app's own Compare and Survey buttons.">
+  &nbsp;
+  <img src="assets/carta-android-findings.webp" width="300"
+       alt="The Android app's Findings tab: each conclusion marked with how strongly it is held.">
+</p>
+
+> The app running on an Android emulator against a synthetic survey of the same fictional
+> `192.168.10.0/24` as the browser captures above, placed in the app's own storage. No real
+> network was surveyed.
+
 Releases are signed APKs on GitHub Releases, and [Obtainium](https://github.com/ImranR98/Obtainium)
 installs and updates them on the phone. See [docs/RELEASING.md](docs/RELEASING.md) for releasing,
 and [docs/DESIGN_SYSTEM_CARTA_MOBILE.md](docs/DESIGN_SYSTEM_CARTA_MOBILE.md) for the design system.
