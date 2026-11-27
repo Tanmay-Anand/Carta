@@ -160,7 +160,7 @@ bash desktop/package.sh
 ```
 
 It writes `dist/Carta.exe` on Windows and `dist/Carta.tar.xz` on Linux, where it needs `gcc`,
-`libgl1-mesa-dev` and `xorg-dev`.
+`libgl1-mesa-dev`, `xorg-dev`, `libwayland-dev` and `libxkbcommon-dev`.
 
 ### Android
 

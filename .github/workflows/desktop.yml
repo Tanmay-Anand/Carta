@@ -32,10 +32,10 @@ jobs:
           cache-dependency-path: desktop/go.sum
 
       # Fyne draws with OpenGL through cgo: a C compiler everywhere, and the
-      # X11 and GL headers on Linux (Fyne's documented list).
+      # X11, Wayland and GL headers on Linux: GLFW 3.4 builds both backends.
       - name: C compiler and graphics headers
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
       - name: C compiler
         if: runner.os == 'Windows'
         id: msys2

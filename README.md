@@ -174,9 +174,9 @@ cd desktop
 go build -o carta-desktop ./cmd/carta-desktop
 ```
 
-On Linux that needs `gcc`, `libgl1-mesa-dev` and `xorg-dev`. `desktop/package.sh`
-makes the release packages (`Carta.exe` with its icon and version, and
-`Carta.tar.xz` for Linux).
+On Linux that needs `gcc`, `libgl1-mesa-dev`, `xorg-dev`, `libwayland-dev` and
+`libxkbcommon-dev`. `desktop/package.sh` makes the release packages (`Carta.exe`
+with its icon and version, and `Carta.tar.xz` for Linux).
 
 ## On a phone
 
