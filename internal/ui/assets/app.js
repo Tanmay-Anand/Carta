@@ -77,8 +77,9 @@ fetch('api/survey').then(r => r.json()).then(s => {
   if (tab === 'findings' || tab === 'devices' || (tab === 'drift' && drift)) showTab(tab);
 }).catch(() => { $('count').textContent = 'No survey'; });
 
-// The Drift tab exists only when there is a comparison to show (the Android
-// app serves one after Compare); `carta ui` has none.
+// The Drift tab exists only when there is a comparison to show: `carta ui
+// --compare EARLIER.json` serves one, and so does the Android app after
+// Compare. Without one, api/drift answers 404 and the tab stays hidden.
 fetch('api/drift').then(r => (r.ok ? r.json() : null)).then(d => {
   if (!d) return;
   drift = d;
