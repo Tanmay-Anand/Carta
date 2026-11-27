@@ -1,21 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Material 3, with Carta's tokens in every colour role. Light and dark
-         come from values/colors.xml and values-night/colors.xml; the theme
-         itself is one DayNight theme.
+    <!-- Material 3, with design D's tokens in every colour role
+         (docs/DESIGN_SYSTEM_CARTA.md). Light and dark come from
+         values/colors.xml and values-night/colors.xml; the theme itself is one
+         DayNight theme.
 
          Dynamic colour is never applied (no DynamicColors call anywhere, and
-         none may be added). Carta's colours mean state — partly known,
-         unidentified, warning, risk — and colours derived from the wallpaper
-         would make those meanings depend on the phone. -->
+         none may be added). Carta's colours mean state, and colours derived
+         from the wallpaper would make those meanings depend on the phone. -->
     <style name="Theme.Carta" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="colorPrimary">@color/fg</item>
         <item name="colorOnPrimary">@color/bg</item>
         <item name="colorPrimaryContainer">@color/panel</item>
         <item name="colorOnPrimaryContainer">@color/fg</item>
-        <item name="colorSecondary">@color/accent</item>
+        <!-- No accent colour in design D: secondary and tertiary are the text
+             colour, so no Material component brings a hue back in. -->
+        <item name="colorSecondary">@color/fg</item>
         <item name="colorOnSecondary">@color/bg</item>
-        <item name="colorTertiary">@color/accent</item>
+        <item name="colorTertiary">@color/fg</item>
         <item name="colorError">@color/risk</item>
         <item name="colorOnError">@color/bg</item>
 
@@ -31,23 +33,27 @@
         <item name="colorSurfaceContainerHighest">@color/panel</item>
         <item name="colorOutline">@color/dim</item>
         <item name="colorOutlineVariant">@color/rule</item>
+        <!-- The snackbar: an inverted surface, its action in the inverted
+             background colour, so it reads on either theme. -->
         <item name="colorSurfaceInverse">@color/fg</item>
         <item name="colorOnSurfaceInverse">@color/bg</item>
-        <item name="colorPrimaryInverse">@color/accent_inverse</item>
+        <item name="colorPrimaryInverse">@color/bg</item>
 
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:textColorPrimary">@color/fg</item>
         <item name="android:textColorSecondary">@color/dim</item>
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="fontFamily">@font/inter</item>
 
-        <!-- 4dp corners, not Material 3's pills: the shape of a control is
-             part of Carta's quiet voice. -->
         <item name="shapeAppearanceSmallComponent">@style/Carta.Shape.Small</item>
         <item name="shapeAppearanceCornerSmall">@style/Carta.Shape.Small</item>
         <item name="shapeAppearanceCornerMedium">@style/Carta.Shape.Small</item>
         <item name="shapeAppearanceCornerExtraSmall">@style/Carta.Shape.Small</item>
 
-        <item name="materialButtonStyle">@style/Carta.Button.Primary</item>
-        <item name="materialButtonOutlinedStyle">@style/Carta.Button</item>
+        <!-- No default button style: every button names its own. A default
+             pill leaks into a text button, which does not set an outline of
+             its own and inherits the pill's. -->
+        <item name="bottomSheetDialogTheme">@style/Carta.BottomSheet</item>
     </style>
 
     <style name="Carta.Shape.Small" parent="">
@@ -55,27 +61,65 @@
         <item name="cornerSize">4dp</item>
     </style>
 
+    <style name="Carta.Shape.Pill" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <!-- The baseline sheet: the panel colour and 18dp top corners, as on the
+         web sheet. -->
+    <style name="Carta.BottomSheet" parent="ThemeOverlay.Material3.BottomSheetDialog">
+        <item name="bottomSheetStyle">@style/Carta.BottomSheet.Modal</item>
+    </style>
+    <style name="Carta.BottomSheet.Modal" parent="Widget.Material3.BottomSheet.Modal">
+        <item name="backgroundTint">@color/panel</item>
+        <item name="shapeAppearance">@style/Carta.Shape.Sheet</item>
+    </style>
+    <style name="Carta.Shape.Sheet" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSizeTopLeft">18dp</item>
+        <item name="cornerSizeTopRight">18dp</item>
+        <item name="cornerSizeBottomLeft">0dp</item>
+        <item name="cornerSizeBottomRight">0dp</item>
+    </style>
+
     <style name="Carta.Mono" parent="">
         <item name="android:fontFamily">@font/jetbrains_mono</item>
+        <!-- AppCompat ranks fontFamily above android:fontFamily, and the theme
+             sets fontFamily to Inter; without this, mono text renders in Inter. -->
+        <item name="fontFamily">@font/jetbrains_mono</item>
         <item name="android:textColor">@color/dim</item>
         <item name="android:textSize">12sp</item>
     </style>
 
+    <!-- C A R T A: mono, widely tracked, regular weight. -->
     <style name="Carta.Brand" parent="">
         <item name="android:fontFamily">@font/jetbrains_mono</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:letterSpacing">0.12</item>
+        <!-- AppCompat ranks fontFamily above android:fontFamily, and the theme
+             sets fontFamily to Inter; without this, mono text renders in Inter. -->
+        <item name="fontFamily">@font/jetbrains_mono</item>
+        <item name="android:letterSpacing">0.3</item>
         <item name="android:textColor">@color/fg</item>
-        <item name="android:textSize">13sp</item>
+        <item name="android:textSize">12sp</item>
+    </style>
+
+    <!-- The survey's state, in the bottom bar: plain words in Inter. -->
+    <style name="Carta.Status" parent="">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textColor">@color/fg</item>
+        <item name="android:textSize">14sp</item>
     </style>
 
     <!-- A state attached to a result, such as STOPPED EARLY. Uppercase mono in
-         a hairline box, like the web UI's confidence badges. -->
+         a square hairline box. -->
     <style name="Carta.Tag" parent="">
         <item name="android:fontFamily">@font/jetbrains_mono</item>
+        <!-- AppCompat ranks fontFamily above android:fontFamily, and the theme
+             sets fontFamily to Inter; without this, mono text renders in Inter. -->
+        <item name="fontFamily">@font/jetbrains_mono</item>
         <item name="android:textColor">@color/warn</item>
         <item name="android:textSize">10sp</item>
-        <item name="android:letterSpacing">0.05</item>
+        <item name="android:letterSpacing">0.08</item>
         <item name="android:background">@drawable/tag_outline</item>
         <item name="android:paddingStart">6dp</item>
         <item name="android:paddingEnd">6dp</item>
@@ -84,45 +128,53 @@
         <item name="android:maxLines">1</item>
     </style>
 
+    <!-- Titles are large and light, the headline voice of design D. -->
     <style name="Carta.Title" parent="">
+        <item name="android:fontFamily">@font/inter</item>
+        <item name="android:textFontWeight">300</item>
         <item name="android:textColor">@color/fg</item>
-        <item name="android:textSize">20sp</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:layout_marginBottom">8dp</item>
+        <item name="android:textSize">30sp</item>
+        <item name="android:lineSpacingMultiplier">1.05</item>
+        <item name="android:layout_marginBottom">14dp</item>
     </style>
 
     <style name="Carta.Body" parent="">
+        <item name="android:fontFamily">@font/inter</item>
         <item name="android:textColor">@color/dim</item>
         <item name="android:textSize">15sp</item>
-        <item name="android:lineSpacingMultiplier">1.3</item>
+        <item name="android:lineSpacingMultiplier">1.35</item>
     </style>
 
-    <!-- 48dp tall with no extra inset: Material adds 6dp above and below a
-         button for touch padding, which would grow the bar without growing the
-         target. -->
-    <style name="Carta.Button" parent="Widget.Material3.Button.OutlinedButton">
+    <!-- A word that acts: Compare, Show last survey, Clear comparison. No
+         outline, no fill; 48dp tall so the target is a fingertip. -->
+    <style name="Carta.Button" parent="Widget.Material3.Button.TextButton">
         <item name="android:minHeight">48dp</item>
         <item name="android:minWidth">48dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:paddingStart">16dp</item>
-        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingStart">12dp</item>
+        <item name="android:paddingEnd">12dp</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">14sp</item>
-        <item name="android:textColor">@color/button_outline_text</item>
-        <item name="strokeColor">@color/button_outline_stroke</item>
-        <item name="shapeAppearance">@style/Carta.Shape.Small</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/button_text</item>
+        <item name="rippleColor">@color/rule</item>
     </style>
 
-    <style name="Carta.Button.Primary" parent="Widget.Material3.Button">
-        <item name="android:minHeight">48dp</item>
+    <!-- The one strong control on a screen: a fully rounded hairline pill.
+         Survey, the refusal's action. Stop turns it red from code. -->
+    <style name="Carta.Button.Primary" parent="Widget.Material3.Button.OutlinedButton">
+        <item name="android:minHeight">52dp</item>
         <item name="android:minWidth">48dp</item>
         <item name="android:insetTop">0dp</item>
         <item name="android:insetBottom">0dp</item>
-        <item name="android:paddingStart">16dp</item>
-        <item name="android:paddingEnd">16dp</item>
+        <item name="android:paddingStart">30dp</item>
+        <item name="android:paddingEnd">30dp</item>
         <item name="android:textAllCaps">false</item>
-        <item name="android:textSize">14sp</item>
-        <item name="shapeAppearance">@style/Carta.Shape.Small</item>
+        <item name="android:textSize">15sp</item>
+        <item name="android:textColor">@color/pill_stroke</item>
+        <item name="strokeColor">@color/pill_stroke</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="shapeAppearance">@style/Carta.Shape.Pill</item>
+        <item name="rippleColor">@color/rule</item>
     </style>
 </resources>

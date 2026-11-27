@@ -1,0 +1,892 @@
+{
+  "format": 1,
+  "survey_id": "20261123T102600Z",
+  "started_at": "2026-11-23T10:26:00Z",
+  "vantage": {
+    "host": "carta-laptop",
+    "interface": "Wi-Fi",
+    "ip": "192.168.10.20",
+    "mac": "00:00:5e:00:53:14",
+    "prefix": "192.168.10.0/24",
+    "gateway": "192.168.10.1",
+    "resolvers": [
+      "192.168.10.1"
+    ],
+    "wireless": "lab-example",
+    "os": "windows",
+    "dhcp_server": "192.168.10.1",
+    "instrument": "carta-desktop"
+  },
+  "entities": [
+    {
+      "id": "host:gateway.lab.example",
+      "identities": [
+        "host:gateway.lab.example",
+        "ip:192.168.10.1",
+        "mac:00:00:5e:00:53:01"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "443/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "router / gateway",
+          "confidence": "observed",
+          "source": {
+            "method": "route-table",
+            "evidence": "default via 192.168.10.1 dev Wi-Fi",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "gateway.lab.example",
+          "confidence": "inferred",
+          "source": {
+            "method": "rdns",
+            "evidence": "1.10.168.192.in-addr.arpa PTR gateway.lab.example.",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "model",
+          "value": "NW-AX3000",
+          "confidence": "asserted",
+          "source": {
+            "method": "ssdp",
+            "evidence": "modelName: NW-AX3000",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "os",
+          "value": "Linux",
+          "confidence": "weak",
+          "source": {
+            "method": "http",
+            "evidence": "Server: lighttpd",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "dns (53/udp)",
+          "confidence": "observed",
+          "source": {
+            "method": "rdns",
+            "evidence": "answered PTR queries",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "https (443/tcp)",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "443/tcp open",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "vendor",
+          "value": "Northwind Networks",
+          "confidence": "inferred",
+          "source": {
+            "method": "oui",
+            "evidence": "00:00:5E",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:ap-upstairs.lab.example",
+      "identities": [
+        "host:ap-upstairs.lab.example",
+        "ip:192.168.10.2",
+        "mac:00:00:5e:00:53:02"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "80/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "access point",
+          "confidence": "inferred",
+          "source": {
+            "method": "ssdp",
+            "evidence": "deviceType: WLANAccessPointDevice",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "ap-upstairs.lab.example",
+          "confidence": "inferred",
+          "source": {
+            "method": "rdns",
+            "evidence": "PTR ap-upstairs.lab.example.",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "vendor",
+          "value": "Northwind Networks",
+          "confidence": "inferred",
+          "source": {
+            "method": "oui",
+            "evidence": "00:00:5E",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:nas.local",
+      "identities": [
+        "host:nas.local",
+        "ip:192.168.10.5",
+        "mac:00:00:5e:00:53:05"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "445/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "storage / NAS",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "_smb._tcp, _afpovertcp._tcp",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "nas.local",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "nas.local A 192.168.10.5",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "smb (445/tcp)",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "_smb._tcp.local",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "https (5001/tcp)",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "5001/tcp open",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "vendor",
+          "value": "Contoso Storage",
+          "confidence": "inferred",
+          "source": {
+            "method": "oui",
+            "evidence": "00:00:5E",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:office-printer.local",
+      "identities": [
+        "host:office-printer.local",
+        "ip:192.168.10.12",
+        "mac:00:00:5e:00:53:0c"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "631/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "printer",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "_ipp._tcp.local",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "office-printer.local",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "office-printer.local A 192.168.10.12",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "model",
+          "value": "Contoso P2100",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "ty=Contoso P2100",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "ipp (631/tcp)",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "_ipp._tcp.local",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:carta-laptop",
+      "identities": [
+        "host:carta-laptop",
+        "ip:192.168.10.20",
+        "mac:00:00:5e:00:53:14"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "this machine",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "survey vantage",
+          "confidence": "observed",
+          "source": {
+            "method": "host",
+            "evidence": "the instrument itself",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "carta-laptop",
+          "confidence": "asserted",
+          "source": {
+            "method": "host",
+            "evidence": "os.Hostname",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "os",
+          "value": "Windows",
+          "confidence": "asserted",
+          "source": {
+            "method": "host",
+            "evidence": "runtime.GOOS",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:studio-pc",
+      "identities": [
+        "host:studio-pc",
+        "ip:192.168.10.21",
+        "mac:00:00:5e:00:53:15"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "445/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "workstation",
+          "confidence": "inferred",
+          "source": {
+            "method": "nbns",
+            "evidence": "file server service \u003c20\u003e",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "studio-pc",
+          "confidence": "asserted",
+          "source": {
+            "method": "nbns",
+            "evidence": "STUDIO-PC \u003c00\u003e UNIQUE",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "os",
+          "value": "Windows",
+          "confidence": "weak",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "TTL 128",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.30",
+      "identities": [
+        "ip:192.168.10.30",
+        "mac:00:00:5e:00:53:1e"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "8008/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "media / TV",
+          "confidence": "asserted",
+          "source": {
+            "method": "ssdp",
+            "evidence": "deviceType: MediaRenderer",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "label",
+          "value": "Living Room TV",
+          "confidence": "asserted",
+          "source": {
+            "method": "ssdp",
+            "evidence": "friendlyName: Living Room TV",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:kitchen-speaker.local",
+      "identities": [
+        "host:kitchen-speaker.local",
+        "ip:192.168.10.31",
+        "mac:00:00:5e:00:53:1f"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "8009/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "speaker",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "_googlecast._tcp",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "kitchen-speaker.local",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "kitchen-speaker.local A 192.168.10.31",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.41",
+      "identities": [
+        "ip:192.168.10.41",
+        "mac:7e:5d:c3:00:00:aa"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "ARP reply",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "personal device (randomised MAC)",
+          "confidence": "weak",
+          "source": {
+            "method": "oui",
+            "evidence": "locally administered bit set",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.42",
+      "identities": [
+        "ip:192.168.10.42",
+        "mac:3a:91:0c:00:00:bb"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "ARP reply",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "personal device (randomised MAC)",
+          "confidence": "weak",
+          "source": {
+            "method": "oui",
+            "evidence": "locally administered bit set",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "host:kids-tablet.local",
+      "identities": [
+        "host:kids-tablet.local",
+        "ip:192.168.10.44",
+        "mac:00:00:5e:00:53:2c"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "ARP reply",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "tablet",
+          "confidence": "weak",
+          "source": {
+            "method": "mdns",
+            "evidence": "_companion-link._tcp",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "hostname",
+          "value": "kids-tablet.local",
+          "confidence": "asserted",
+          "source": {
+            "method": "mdns",
+            "evidence": "kids-tablet.local A 192.168.10.44",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.50",
+      "identities": [
+        "ip:192.168.10.50",
+        "mac:00:00:5e:00:53:32"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "80/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "smart plug",
+          "confidence": "inferred",
+          "source": {
+            "method": "http",
+            "evidence": "\u003ctitle\u003ePlug setup\u003c/title\u003e",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "vendor",
+          "value": "Fabrikam IoT",
+          "confidence": "inferred",
+          "source": {
+            "method": "oui",
+            "evidence": "00:00:5E",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.60",
+      "identities": [
+        "ip:192.168.10.60",
+        "mac:00:00:5e:00:53:3c"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "554/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "class",
+          "value": "camera",
+          "confidence": "weak",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "554/tcp (rtsp) open",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "rtsp (554/tcp)",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "554/tcp open",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "vendor",
+          "value": "Fabrikam IoT",
+          "confidence": "inferred",
+          "source": {
+            "method": "oui",
+            "evidence": "00:00:5E",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    },
+    {
+      "id": "ip:192.168.10.77",
+      "identities": [
+        "ip:192.168.10.77"
+      ],
+      "claims": [
+        {
+          "key": "alive",
+          "value": "yes",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "22/tcp handshake",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        },
+        {
+          "key": "service",
+          "value": "ssh (22/tcp)",
+          "confidence": "observed",
+          "source": {
+            "method": "tcp-connect",
+            "evidence": "22/tcp open",
+            "at": "2026-11-23T10:26:00Z"
+          }
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "from": "host:carta-laptop",
+      "to": "host:ap-upstairs.lab.example",
+      "kind": "same-broadcast-domain",
+      "confidence": "observed",
+      "source": {
+        "method": "arp-cache",
+        "evidence": "both in this host's ARP cache",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:ap-upstairs.lab.example",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:carta-laptop",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:kids-tablet.local",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:kitchen-speaker.local",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:nas.local",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:office-printer.local",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "host:studio-pc",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.30",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.41",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.42",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.50",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.60",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    },
+    {
+      "from": "host:gateway.lab.example",
+      "to": "ip:192.168.10.77",
+      "kind": "gateway-of",
+      "confidence": "inferred",
+      "source": {
+        "method": "route-table",
+        "evidence": "on-link, default via 192.168.10.1",
+        "at": "2026-11-23T10:26:00Z"
+      }
+    }
+  ],
+  "coverage": [
+    {
+      "prefix": "192.168.10.0/24",
+      "addrs_swept": 254,
+      "addrs_total": 254,
+      "responded": 14,
+      "ports_probed": [
+        22,
+        53,
+        80,
+        443,
+        445,
+        554,
+        631,
+        8008,
+        8009
+      ],
+      "protocols": [
+        "mdns",
+        "ssdp",
+        "nbns"
+      ],
+      "frontier": null,
+      "notes": null,
+      "started_at": "2026-11-23T10:26:00Z",
+      "ended_at": "2026-11-23T10:26:41Z"
+    }
+  ],
+  "findings": [
+    {
+      "severity": "risk",
+      "title": "A camera streams without a name or an owner",
+      "detail": "192.168.10.60 answers on RTSP (554/tcp) and announces nothing about itself. Find out whose it is.",
+      "confidence": "observed",
+      "entities": [
+        "ip:192.168.10.60"
+      ]
+    },
+    {
+      "severity": "warn",
+      "title": "2 devices hide their hardware address",
+      "detail": "Randomised MACs are normal on phones, but they cannot be told apart across surveys.",
+      "confidence": "inferred"
+    },
+    {
+      "severity": "info",
+      "title": "One resolver, and it is the gateway",
+      "detail": "If 192.168.10.1 stops answering DNS, every device on this network loses names.",
+      "confidence": "observed"
+    }
+  ]
+}

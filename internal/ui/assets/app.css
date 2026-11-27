@@ -1,311 +1,169 @@
-/* carta UI — one stylesheet, no framework, one bundled typeface.
-   Everything a browser needs to render this is already in the binary. */
+/* Carta, design D (docs/DESIGN_SYSTEM_CARTA.md). One stylesheet, no
+   framework, two bundled typefaces: everything a browser needs to render this
+   is already in the binary. */
 
-/* JetBrains Mono (OFL; fonts/JetBrainsMono-OFL.txt) carries everything that is
-   measured — addresses, prefixes, counts, confidence. It is bundled rather than
-   left to the platform because the platform's monospace differs everywhere and
-   is Droid Sans Mono on Android; the identity rides on this one face. Loaded
-   from 'self', so the Content-Security-Policy is untouched. */
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-display: swap;
-}
-@font-face {
-  font-family: "JetBrains Mono";
-  src: url("fonts/JetBrainsMono-SemiBold.woff2") format("woff2");
-  font-weight: 600 700;
-  font-display: swap;
-}
+/* Inter (OFL, fonts/Inter-OFL.txt) for prose and controls, Light for the
+   headline; JetBrains Mono (OFL, fonts/JetBrainsMono-OFL.txt) for everything
+   measured. Loaded from 'self', so the Content-Security-Policy is untouched. */
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+@font-face { font-family: "Inter"; src: url("fonts/Inter-Light.woff2") format("woff2"); font-weight: 300; font-display: swap; }
+@font-face { font-family: "JetBrains Mono"; src: url("fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 
+/* Tokens (§2.1). faint is decoration only: it is never text. */
 :root {
-  --bg: #fbfbf9;
-  --fg: #16181d;
-  --dim: #6b7280;
-  --rule: #e3e3de;
-  --panel: #ffffff;
-  --named: #24292f;
-  --partial: #0969da;
-  --unknown: #b58900;
-  --infra: #0969da;
-  --risk: #b42318;
-  --warn: #b54708;
-  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --bg: #fafaf8; --panel: #ffffff; --fg: #111111; --dim: #62625e; --faint: #b4b4ae;
+  --hair: #e4e4df; --thread: #cfcfca; --red: #d92d20; --amber: #a87a00; --warn: #b54708;
+  --sans: "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --pad: 28px;
 }
-
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0e0f12;
-    --fg: #e8e8e3;
-    --dim: #9aa0aa;
-    --rule: #24262c;
-    --panel: #14161a;
-    --named: #d6d6d0;
-    --partial: #58a6ff;
-    --unknown: #d9a441;
-    --infra: #58a6ff;
-    --risk: #ff7b72;
-    --warn: #e3a008;
+    --bg: #000000; --panel: #0b0b0b; --fg: #f0f0ed; --dim: #8b8b87; --faint: #4a4a47;
+    --hair: #1d1d1c; --thread: #2a2a28; --red: #ff3b2f; --amber: #d29b3c; --warn: #e3a008;
   }
 }
 
-* { box-sizing: border-box; }
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; }
+/* A column: the top bar (when there is one) and main, which takes the rest.
+   In the app the top bar is gone, and main must still fill the screen. */
+body { background: var(--bg); color: var(--fg); font: 14px/1.4 var(--sans); overflow: hidden;
+  display: flex; flex-direction: column; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
+.hidden { display: none !important; }
+.caps { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+:focus-visible { outline: 1px solid var(--dim); outline-offset: 3px; }
 
-body {
-  margin: 0;
-  font-family: var(--sans);
-  background: var(--bg);
-  color: var(--fg);
-  height: 100vh;
-  display: flex;
-  flex-direction: column;
-}
+/* ---------- top bar (not in the app: the app draws its own) ---------- */
+.top { display: flex; align-items: center; gap: 30px; padding: 16px var(--pad); border-bottom: 1px solid var(--hair); }
+.mark { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; }
+.embedded .top { display: none; }
 
-.bar {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: .6rem 1rem;
-  border-bottom: 1px solid var(--rule);
-  flex-wrap: wrap;
-}
+main { flex: 1; display: grid; min-height: 0; grid-template-columns: 340px 1fr 380px; }
 
-.brand {
-  font-family: var(--mono);
-  font-weight: 600;
-  letter-spacing: .12em;
-  text-transform: uppercase;
-  font-size: .78rem;
-}
+/* ---------- left: what this survey is ---------- */
+.summary { border-right: 1px solid var(--hair); padding: 26px var(--pad) 24px; overflow-y: auto; display: flex; flex-direction: column; }
+h1 { font-weight: 300; font-size: 48px; line-height: 1; letter-spacing: -.015em; }
+h1 small { display: block; font-size: 20px; color: var(--dim); margin-top: 10px; letter-spacing: 0; }
+.facts { margin-top: 18px; display: grid; grid-template-columns: 74px 1fr; row-gap: 6px; font: 11.5px/1.4 var(--mono); }
+.facts dt { color: var(--dim); }
+.facts dd { margin: 0; word-break: break-all; }
+.factline { display: none; }
+.coverage { margin-top: 26px; }
+.matrix { margin-top: 10px; display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; }
+.matrix.wide { grid-template-columns: repeat(32, 1fr); gap: 3px; }
+.matrix i { aspect-ratio: 1; border-radius: 50%; background: var(--faint); }
+.matrix i.a { background: var(--fg); }
+/* never asked: a ring in dim, not faint, because it carries a meaning */
+.matrix i.u { background: none; box-shadow: inset 0 0 0 1px var(--dim); }
+.counts { margin-top: 14px; display: flex; flex-wrap: wrap; row-gap: 4px; justify-content: space-between; color: var(--dim); font-size: 12px; }
+.counts b { display: block; color: var(--fg); font-weight: 300; font-size: 22px; }
+.note { margin-top: 8px; color: var(--dim); font-size: 13px; }
+.status { margin-top: auto; padding-top: 18px; display: flex; align-items: center; gap: 10px; font-size: 13px; }
+.tag { font: 9.5px var(--mono); letter-spacing: .12em; color: var(--warn); border: 1px solid var(--warn); padding: 1px 6px; text-transform: uppercase; }
 
-/* The mark is black strokes on transparency, so it disappears on a dark
-   background. Inverting it is a two-line fix; shipping a second PNG would be
-   another file in the binary for the same eight kilobytes of information. */
-.mark { display: block; margin-right: -1rem; opacity: .9; }
-@media (prefers-color-scheme: dark) {
-  .mark { filter: invert(1); }
-}
+/* ---------- centre: the map ---------- */
+.mapwrap { position: relative; min-width: 0; min-height: 0; }
+#map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+#map.grabbing { cursor: grabbing; }
+#map .dev { cursor: pointer; }
+#map text { font-family: var(--sans); }
+.maptop { position: absolute; left: 24px; right: 24px; top: 20px; display: flex; justify-content: space-between; pointer-events: none; }
+.hint { font: 10.5px var(--mono); color: var(--dim); }
+.legend { position: absolute; left: 24px; bottom: 18px; display: flex; gap: 18px; color: var(--dim); font-size: 12px; pointer-events: none; }
+.key { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 7px; vertical-align: -1px; }
+.key.named { background: var(--fg); }
+.key.partial { box-shadow: inset 0 0 0 1.3px var(--fg); }
+.key.unknown { box-shadow: inset 0 0 0 1.3px var(--amber); }
+.link { color: var(--dim); font-size: 12px; }
+.link:hover { color: var(--fg); }
+.fit { position: absolute; right: 24px; bottom: 16px; }
+.skip { position: absolute; left: -9999px; top: 8px; z-index: 20; background: var(--bg); color: var(--fg); padding: 6px 10px; border: 1px solid var(--dim); }
+.skip:focus { left: 24px; }
+.empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--dim); }
 
-/* Off-screen until it has keyboard focus, then the first thing on the page. */
-.skip { position: absolute; left: -9999px; top: 0; }
-.skip:focus {
-  left: 1rem; top: .5rem; z-index: 10;
-  padding: .5rem .75rem;
-  background: var(--panel); color: var(--fg);
-  border: 1px solid var(--fg); border-radius: 4px;
-}
-:focus-visible { outline: 2px solid var(--partial); outline-offset: 2px; }
+/* ---------- right: one panel, four tabs ---------- */
+.panel { border-left: 1px solid var(--hair); display: grid; grid-template-rows: auto auto 1fr; min-height: 0; background: var(--bg); }
+.grip { display: none; }
+.tabs { display: flex; gap: 24px; padding: 20px var(--pad) 0; border-bottom: 1px solid var(--hair); overflow-x: auto; }
+.tabs button { padding-bottom: 12px; color: var(--dim); border-bottom: 1px solid transparent; margin-bottom: -1px; white-space: nowrap; }
+.tabs button[aria-selected="true"] { color: var(--fg); border-color: var(--fg); }
+.tabs sup { font: 9.5px var(--mono); margin-left: 3px; color: var(--dim); }
+.tabs sup.risk { color: var(--red); }
+.body { overflow-y: auto; padding: 24px var(--pad) 30px; min-height: 0; }
 
-/* Inside the Android app the native bar already names the app and the native
-   status strip already says what was surveyed, so the page's own header is
-   chrome, not information, and every pixel of it came out of the map. */
-.embedded .bar { display: none; }
+.kicker { color: var(--red); }
+.dev h2 { font-weight: 300; font-size: 26px; margin-top: 6px; word-break: break-word; line-height: 1.15; }
+.addr { font: 11.5px var(--mono); color: var(--dim); margin-top: 5px; word-break: break-all; white-space: pre-wrap; }
+.selnote { color: var(--dim); font-size: 13px; margin-bottom: 16px; }
+.claims { margin-top: 22px; display: grid; gap: 14px; }
+.claim .k { font-size: 11.5px; color: var(--dim); }
+.claim .v { font-size: 15px; margin-top: 2px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.claim .v.none { color: var(--dim); font-style: italic; font-size: 14px; }
+.claim .e, .ev { font: 11px/1.45 var(--mono); color: var(--dim); margin-top: 2px; word-break: break-word; }
+.conf { font: 10.5px var(--mono); color: var(--dim); white-space: nowrap; }
+.conf.asserted, .conf.observed { color: var(--fg); }
+.sub { margin-top: 26px; }
+.svc { display: flex; justify-content: space-between; margin-top: 8px; }
+.row { display: block; width: 100%; text-align: left; padding: 13px 0; border-bottom: 1px solid var(--hair); }
+.row:hover .rt { text-decoration: underline; text-underline-offset: 3px; }
+.finding { display: grid; grid-template-columns: 3px 1fr; gap: 12px; }
+.finding .bar { background: var(--faint); }
+.finding .bar.risk { background: var(--red); }
+.finding .bar.warn { background: var(--warn); }
+.finding .title { display: flex; justify-content: space-between; gap: 12px; }
+.finding p { color: var(--dim); margin-top: 5px; font-size: 13px; white-space: pre-wrap; }
+.filter { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--hair); color: var(--fg); font: inherit; padding: 4px 0 10px; outline: none; }
+.filter:focus { border-color: var(--dim); }
+.filter::placeholder { color: var(--dim); }
+.device { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.device .what { font: 11px var(--mono); color: var(--dim); text-align: right; }
+.device .unk { color: var(--dim); }
+.device.sel .rt { color: var(--red); }
+.drift .kind { font: 10px var(--mono); letter-spacing: .12em; color: var(--dim); text-transform: uppercase; }
+.drift .rt { margin-top: 4px; display: block; }
+.drift .kind, .drift .ev { display: block; }
+.caveat { color: var(--warn); font-size: 13px; margin-bottom: 10px; }
+.since { color: var(--dim); font-size: 13px; margin-bottom: 6px; }
 
-.vantage { font-family: var(--mono); font-size: .72rem; color: var(--dim); }
-.vantage .vpart { display: inline-block; margin-right: 1.4em; }
-.vantage .vpart:last-child { margin-right: 0; }
-.legend { margin-left: auto; display: flex; gap: .9rem; font-size: .68rem; color: var(--dim); }
-.key { display: flex; align-items: center; gap: .35rem; }
+/* ---------- two columns: wide but short (a phone on its side) ---------- */
+.twocol main { grid-template-columns: 1fr 340px; }
+.twocol .summary { display: none; }
+.twocol .maptop .hint { display: none; }
 
-.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.dot.named { background: var(--named); }
-.dot.partial { background: transparent; border: 1.5px solid var(--partial); }
-.dot.unknown { background: transparent; border: 1.5px dashed var(--unknown); }
-.dot.infra { background: var(--infra); }
-
-main { flex: 1; display: flex; min-height: 0; }
-
-/* The coverage strip sits under the map, not over it. Laid over the canvas, it
-   covered whatever nodes the layout placed at the bottom — on a short screen,
-   most of them — and the map was fitted to space it could not use. */
-.graph { flex: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
-/* touch-action: none hands every gesture on the map to app.js, which pans and
-   pinch-zooms it, instead of letting the page scroll or zoom underneath. */
-canvas { flex: 1; width: 100%; min-height: 0; display: block; cursor: grab; touch-action: none; }
-canvas:active { cursor: grabbing; }
-
-.coverage {
-  padding: .4rem 1rem .6rem;
-  font-family: var(--mono);
-  font-size: .66rem;
-  color: var(--dim);
-}
-.covbar {
-  height: 6px;
-  display: flex;
-  border: 1px solid var(--rule);
-  margin-bottom: .35rem;
-}
-.covbar i { display: block; height: 100%; }
-.covbar .responded { background: var(--named); }
-/* Unanswered space is drawn as hatching, never as a filled bar: it is unknown,
-   and a solid colour would read as "measured and empty". */
-.covbar .silent {
-  background: repeating-linear-gradient(45deg, var(--rule) 0 3px, transparent 3px 6px);
-}
-/* Never reached at all — a survey cut short. Left open, so it reads as a
-   different kind of nothing from the hatching. */
-.covbar .unswept { background: transparent; }
-
-.panel {
-  width: 27rem;
-  max-width: 45vw;
-  border-left: 1px solid var(--rule);
-  background: var(--panel);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.tabs { display: flex; border-bottom: 1px solid var(--rule); }
-.tabs button {
-  flex: 1;
-  padding: .55rem;
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--dim);
-  font: inherit;
-  font-size: .75rem;
-  cursor: pointer;
-}
-.tabs button.on { color: var(--fg); border-bottom-color: var(--fg); }
-
-.tabbody { padding: 1rem; overflow-y: auto; flex: 1; font-size: .8rem; line-height: 1.5; }
-.hidden { display: none; }
-.hint { color: var(--dim); }
-
-h2.devname { font-size: 1rem; margin: 0 0 .15rem; }
-.devsub { font-family: var(--mono); font-size: .7rem; color: var(--dim); margin-bottom: .9rem; }
-
-table { width: 100%; border-collapse: collapse; font-size: .74rem; }
-th, td { text-align: left; padding: .3rem .4rem; border-bottom: 1px solid var(--rule); vertical-align: top; }
-th { color: var(--dim); font-weight: 500; font-size: .68rem; text-transform: uppercase; letter-spacing: .04em; }
-td.k { color: var(--dim); white-space: nowrap; }
-code, .mono { font-family: var(--mono); font-size: .72rem; }
-
-/* Confidence is a word, never a colour alone — colour-blind readers and
-   greyscale printouts both have to carry the same meaning. */
-.conf {
-  font-family: var(--mono);
-  font-size: .62rem;
-  text-transform: uppercase;
-  letter-spacing: .05em;
-  padding: .05rem .3rem;
-  border: 1px solid var(--rule);
-  border-radius: 2px;
-  color: var(--dim);
-  white-space: nowrap;
-}
-.conf.asserted { border-color: var(--partial); color: var(--partial); }
-.conf.observed { border-color: var(--named); color: var(--fg); }
-.conf.inferred { border-style: dashed; }
-.conf.weak { border-style: dotted; opacity: .8; }
-
-.evidence { color: var(--dim); font-size: .68rem; }
-
-.finding { border-left: 2px solid var(--rule); padding: .1rem 0 .1rem .7rem; margin-bottom: 1rem; }
-.finding.risk { border-color: var(--risk); }
-.finding.warn { border-color: var(--warn); }
-.finding h3 { font-size: .82rem; margin: 0 0 .25rem; }
-.finding p { margin: 0; color: var(--dim); white-space: pre-wrap; font-size: .74rem; }
-
-.row { display: flex; justify-content: space-between; gap: .5rem; padding: .3rem 0; border-bottom: 1px solid var(--rule); cursor: pointer; }
-.row:hover { background: rgba(127,127,127,.07); }
-.row .label { font-weight: 500; }
-.row .meta { color: var(--dim); font-family: var(--mono); font-size: .68rem; text-align: right; }
-
-.searchbox {
-  width: 100%;
-  padding: .4rem .5rem;
-  margin-bottom: .6rem;
-  font: inherit;
-  font-size: .76rem;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--rule);
-  border-radius: 3px;
-}
-
-.change { padding: .35rem 0; border-bottom: 1px solid var(--rule); }
-.change .label { font-weight: 500; margin-right: .4rem; }
-.caveat { color: var(--warn); font-size: .74rem; margin: 0 0 .5rem; }
-.caveat.strong { font-weight: 600; }
-
-/* ---------- compact and sheet layouts ----------
-
-   compact (?embedded, or narrower than 760px): the vantage line moves into the
-   panel's head and the legend into a card behind a button on the map, so the
-   header stops eating the map's height. Shape still means certainty, so the
-   legend stays one tap away.
-
-   sheet (narrower than 760px): the map fills the screen and the panel slides
-   over it from the bottom, snapping to peek, half or full. app.js sets both
-   classes; the desktop's side-by-side layout is neither. */
-
-.handle, .panelhead, .legendbtn { display: none; }
-
-body.compact .panelhead { display: block; padding: .3rem 1rem .5rem; }
-body.compact .panelhead .vantage { display: block; font-size: .7rem; }
-
-body.compact .legendbtn {
-  display: block;
-  position: absolute; top: .6rem; right: .6rem; z-index: 5;
-  min-height: 32px; padding: .3rem .7rem;
-  font-family: var(--mono); font-size: .7rem;
-  color: var(--fg); background: var(--panel);
-  border: 1px solid var(--dim); border-radius: 4px;
-}
-.legendcard {
-  position: absolute; top: 3rem; right: .6rem; z-index: 5;
-  padding: .7rem .9rem;
-  background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
-}
-.legendcard .legend { flex-direction: column; gap: .45rem; margin: 0; font-size: .74rem; }
-
-body.sheet { height: 100vh; height: 100dvh; }
-body.sheet main { display: block; position: relative; overflow: hidden; }
-body.sheet .graph { position: absolute; inset: 0; }
-/* The panel is always full height and slid down by a transform, so moving it
-   never relayouts the map underneath. No shadow: depth is tone and line. */
-body.sheet .panel {
-  position: absolute; left: 0; right: 0; bottom: 0;
-  width: auto; max-width: none;
-  border-left: none; border-top: 1px solid var(--rule);
-  border-radius: 12px 12px 0 0;
-  will-change: transform;
-  z-index: 10; /* above the map's own overlays (the legend button and card) */
-}
-body.sheet .panel.animating { transition: transform .22s ease-out; }
-/* The grip (handle and head) takes vertical drags for the sheet; the canvas
-   keeps its own pan and pinch, and the panel's body scrolls normally. */
-body.sheet .grip { touch-action: none; cursor: grab; }
-body.sheet .handle {
-  display: flex; justify-content: center; align-items: center;
-  width: 100%; height: 22px; padding: 0;
-  background: none; border: none;
-}
-body.sheet .handle span { width: 36px; height: 4px; border-radius: 2px; background: var(--dim); opacity: .6; }
-body.sheet .tabbody { touch-action: pan-y; overscroll-behavior: contain; }
-body.sheet .panelhead .coverage { padding: .35rem 0 0; }
-
-@media (max-width: 760px) {
-  .bar { gap: .5rem 1rem; }
-  .tabs button { padding: .8rem .4rem; font-size: .8rem; }
-  .tabbody { font-size: .85rem; }
-  .row { padding: .6rem 0; }
-  .searchbox { font-size: 1rem; padding: .6rem; }
-}
-
-/* A phone on its side: wide enough for the side-by-side layout, but with so
-   little height that every row of chrome is taken from the map. */
-@media (max-height: 520px) and (min-width: 761px) {
-  .bar { padding: .3rem 1rem; gap: .3rem 1rem; }
-  .legend { gap: .6rem; }
-  .tabs button { padding: .4rem; }
-  .tabbody { padding: .6rem 1rem; }
-  .coverage { padding: .3rem 1rem .4rem; }
-  .panel { width: 22rem; }
-}
+/* ---------- sheet: a narrow screen (mock e-phone.html) ---------- */
+.sheet main { grid-template-columns: 1fr; grid-template-rows: auto 1fr; position: relative; }
+.sheet .summary { border: 0; padding: 14px 22px 0; overflow: visible; min-width: 0; }
+.sheet h1 { font-size: 40px; }
+.sheet h1 small { font-size: 17px; margin-top: 6px; }
+.sheet .facts { display: none; }
+.sheet .factline { display: block; margin-top: 10px; font: 11px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+.sheet .factline b { color: var(--fg); font-weight: 400; }
+.sheet .coverage { margin-top: 14px; }
+.sheet .matrix { grid-template-columns: repeat(32, 1fr); gap: 3px; }
+.sheet .coverage > .caps { display: none; }
+.sheet #covnote { display: none; }
+.sheet .counts { justify-content: flex-start; column-gap: 18px; }
+/* At a large text size the summary would leave the map a sliver; the dot
+   matrix goes and its counts stay, so the coverage is still said. */
+.sheet.tight .matrix { display: none; }
+.sheet .counts b { display: inline; font-size: 13px; font-weight: 400; margin-right: 4px; }
+.sheet .status { display: none; }
+.sheet .maptop, .sheet .legend, .sheet .fit { display: none; }
+.sheet #map { overflow: hidden; }
+.sheet .panel { position: absolute; left: 0; right: 0; bottom: 0; z-index: 10; border: 0; border-top: 1px solid var(--hair);
+  border-radius: 18px 18px 0 0; background: var(--panel); transition: height .22s ease; }
+.sheet .grip { display: grid; place-items: center; padding: 8px 0 2px; touch-action: none; cursor: grab; }
+.handle { width: 48px; height: 18px; display: grid; place-items: center; }
+.handle span { width: 36px; height: 4px; border-radius: 2px; background: var(--faint); }
+.sheet .tabs { padding: 6px 22px 0; gap: 20px; }
+.sheet .tabs button { padding: 8px 0 11px; }
+.sheet .body { padding: 16px 22px 24px; }
+.sheet.peek .body { overflow: hidden; }
+/* With the sheet open the summary shrinks to one line, so the map keeps room
+   for the device being read about. */
+.sheet.open h1 { font-size: 22px; }
+.sheet.open h1 small { display: inline; font-size: 15px; margin: 0 0 0 6px; }
+.sheet.open .factline, .sheet.open .coverage { display: none; }
+.sheet.open .summary { padding-bottom: 12px; border-bottom: 1px solid var(--hair); }

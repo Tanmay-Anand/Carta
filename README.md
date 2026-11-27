@@ -27,7 +27,8 @@ carta survey
 Thirty seconds later you have a device inventory, a topology diagram, an
 addressing plan, a findings report, and a signed-in-place snapshot that the next
 run diffs against. No installation, no agent, no credentials, no admin rights,
-no internet.
+no internet. Or open **Carta Desktop**, the same survey in a window of its own,
+or the Android app on a phone.
 
 ## The idea that makes this more than another scanner
 
@@ -88,7 +89,7 @@ carta ui
 
 <p align="center">
   <img src="assets/carta-map.webp" width="900"
-       alt="The survey map with a device selected: every claim shown beside the evidence for it, and the unanswered part of the range hatched along the bottom.">
+       alt="The browser view: the device count and a dot per address for coverage on the left, the map in the middle, and the selected gateway with the evidence for each claim on the right.">
 </p>
 
 Opens the survey on `127.0.0.1` — bound to loopback specifically, because a
@@ -97,9 +98,11 @@ interface is, and serving that on `0.0.0.0` would publish the map of the network
 to the network.
 
 Shape carries certainty: a filled node is identified, an outlined node is partly
-known, a dashed node answered and revealed nothing. The bar under the map shows
-what proportion of the address range answered at all, with the silent remainder
-hatched rather than filled.
+known, a dashed amber node answered and revealed nothing. Coverage is one dot per
+address in the range: bright for an address that answered, grey for one that was
+asked and stayed silent, and an empty ring for one it never asked (a quiet
+survey asks nothing, and a survey stopped early leaves the rest of the range
+unasked). Silent means unknown, not empty.
 
 The findings tab is the same discipline applied to conclusions — each one states
 how strongly it is held, and the coverage note says what was not reached:
@@ -109,7 +112,7 @@ how strongly it is held, and the coverage note says what was not reached:
        alt="Findings from a survey, each marked with the confidence it is held at.">
 </p>
 
-> Both captures are the real UI running against a synthetic snapshot of a
+> The captures on this page are the real UI running against a synthetic snapshot of a
 > fictional `192.168.10.0/24`. No real network appears in this repository, which
 > is the same reason the tool writes its own output to a gitignored directory.
 
@@ -128,9 +131,56 @@ runs on the most durable identity available (burned-in MAC, then hostname, then
 address) and each match records which one it used. Randomised MAC addresses are
 explicitly *not* used to match, because a phone regenerates one per network.
 
+```bash
+carta ui --compare carta-surveys/20261116T091400Z/survey.json
+```
+
+opens the latest survey with a Drift tab that lists each change and how it was
+matched:
+
+<p align="center">
+  <img src="assets/carta-drift.webp" width="900"
+       alt="The Drift tab: a device that appeared, one that moved address and was matched by its MAC, and one with a new service.">
+</p>
+
+## Carta Desktop
+
+Carta in a window: one portable program, no browser, no server, nothing to
+install. **Survey** and **Survey quietly** run the same engine as `carta survey`
+and `carta survey --passive`, and each survey is saved, as the CLI saves one, in
+a `carta-surveys` folder next to the program (or in your user config folder when
+the program's own folder is read-only). It opens on the last survey. **Open**
+reads any saved `survey.json`, and **Compare** picks an earlier survey of the
+network and shows what changed. A selected device stays selected across a new
+survey when it can be matched, and the panel says how strongly, or why it was
+not seen this time.
+
+<p align="center">
+  <img src="assets/carta-desktop.webp" width="900"
+       alt="Carta Desktop on Windows: the survey controls under the coverage dots, the map, and the Device, Findings, Devices and Drift tabs.">
+</p>
+
+```bash
+carta-desktop --demo   # a fictional network; sends nothing
+```
+
+It is built with [Fyne](https://fyne.io), which draws with OpenGL through cgo, so
+building it needs a C compiler; the CLI never does. On Windows, double-click
+`carta.bat` at the root of the repository: it builds the app with Go and MSYS2's
+UCRT64 gcc and starts it. Elsewhere:
+
+```bash
+cd desktop
+go build -o carta-desktop ./cmd/carta-desktop
+```
+
+On Linux that needs `gcc`, `libgl1-mesa-dev`, `xorg-dev`, `libwayland-dev` and
+`libxkbcommon-dev`. `desktop/package.sh` makes the release packages (`Carta.exe`
+with its icon and version, and `Carta.tar.xz` for Linux).
+
 ## On a phone
 
-`android/` is a prototype Android app. It runs the same Go core as the CLI, bound with gomobile,
+`android/` is the Android app. It runs the same Go core as the CLI, bound with gomobile,
 and shows the result in the same UI, laid out for a phone. A phone is a weaker instrument than a
 laptop, and the app says so rather than hiding it:
 
@@ -154,14 +204,21 @@ laptop, and the app says so rather than hiding it:
 </p>
 
 > The app running on an Android emulator against a synthetic survey of the same fictional
-> `192.168.10.0/24` as the browser captures above, placed in the app's own storage. No real
-> network was surveyed.
+> `192.168.10.0/24` as the captures above, placed in the app's own storage. No real network was
+> surveyed.
 
 Releases are signed APKs on GitHub Releases, and [Obtainium](https://github.com/ImranR98/Obtainium)
 installs and updates them on the phone. See [docs/RELEASING.md](docs/RELEASING.md) for releasing,
-and [docs/DESIGN_SYSTEM_CARTA_MOBILE.md](docs/DESIGN_SYSTEM_CARTA_MOBILE.md) for the design system.
+and [docs/DESIGN_SYSTEM_CARTA.md](docs/DESIGN_SYSTEM_CARTA.md) for the design system.
 
 ## Install
+
+Each [release](https://github.com/Tanmay-Anand/Carta/releases) carries the CLI for Linux, macOS
+and Windows (amd64 and arm64), Carta Desktop for Windows and Linux, the Android APK, and
+`SHA256SUMS`. Every file is a single download with nothing to install alongside it; Carta Desktop
+on Linux needs the system's OpenGL and X11 libraries, which a desktop install already has.
+
+Or install the CLI with Go:
 
 ```bash
 go install github.com/Tanmay-Anand/carta/cmd/carta@latest
@@ -183,17 +240,28 @@ site" — including a machine you are not allowed to install anything on.
 carta survey [flags]        survey the network this machine is on
 carta diff A.json [B.json]  report what changed between two surveys
 carta ui [SNAPSHOT.json]    open a survey in a browser
+carta version
 ```
+
+`carta survey` flags:
 
 | Flag | Default | |
 |---|---|---|
 | `--out DIR` | `carta-surveys` | where the document pack is written |
-| `--passive` | off | emit nothing: caches and multicast listening only |
+| `--passive` | off | send nothing: this machine's own caches only |
 | `--timeout DUR` | `700ms` | per-connection budget |
 | `--concurrency N` | `128` | parallel workers |
 | `--deadline DUR` | `4m` | hard limit on the whole survey |
 | `--oui FILE` | built-in | an IEEE `oui.csv` for full vendor coverage |
 | `--open` | off | open the browser view when the survey finishes |
+
+`carta ui` flags:
+
+| Flag | Default | |
+|---|---|---|
+| `--compare FILE` | none | an earlier survey; adds a Drift tab with what changed since |
+| `--port N` | `7373` | the loopback port; `0` picks a free one |
+| `--no-open` | off | serve the view without opening a browser |
 
 ## How it works
 
@@ -235,8 +303,9 @@ location) are designed but not implemented — see [Not implemented](#not-implem
 Survey only networks you are authorised to survey. `carta` emits ordinary
 unprivileged traffic — TCP connects, multicast queries, DNS lookups — but on a
 managed network that is still activity someone may have to explain. `--passive`
-emits nothing at all and is the correct default for OT, ICS and clinical
-networks.
+sends nothing at all, not even a multicast question, and is the correct default
+for OT, ICS and clinical networks. It sees only what this machine already knows:
+the devices in its own ARP cache.
 
 It refuses to sweep a prefix larger than a /22 rather than silently truncating
 it, because a truncated sweep rendered as a complete one is the exact failure
@@ -262,17 +331,35 @@ Honest about its own coverage, since that is the whole point:
 go test ./...
 ```
 
-The Android binding is its own Go module, so the command above doesn't reach it. Run its tests
-from `mobile/`:
+The Android binding and Carta Desktop are Go modules of their own, so the command above doesn't
+reach them. Run their tests from `mobile/` and from `desktop/` (the desktop tests need the C
+compiler, and run headless on Fyne's test driver):
 
 ```bash
 go test ./...
 ```
 
+`internal/store/snapshot/testdata/` holds surveys written in format 1, frozen: every future
+Carta must still read, diff and render them.
+
 The suite covers the confidence calculus and its promotion rules, entity
 resolution and merge behaviour, snapshot determinism, drift matching across
 address changes, Markdown injection from hostile device names, and a regression
 test for a parser that once hung forever on an unhandled DNS record type.
+
+## Version 1
+
+Until Carta 2:
+
+- **Surveys stay readable.** `survey.json` records its format (`"format": 1`). Every 1.x Carta
+  reads every format 1 survey, including those written by 0.1.0, which predate the field. A
+  survey written by a newer Carta is refused with a message, never half read.
+- **The CLI stays put.** The commands and flags under [Usage](#usage) keep working as documented;
+  new ones may be added.
+- **Android updates install over the app.** Every release is signed with the same key, so an
+  update keeps the surveys on the phone.
+
+A change that would break one of these waits for Carta 2.
 
 ## Licence
 

@@ -208,8 +208,17 @@ type Coverage struct {
 // a complete one.
 func (c Coverage) Complete() bool { return c.AddrsTotal > 0 && c.AddrsSwept >= c.AddrsTotal }
 
+// Format is the version of the survey.json layout this build writes. Carta 1
+// promises that every 1.x reads format 1, so a change that an older reader
+// would misunderstand needs a new number, and a reader refuses a number it does
+// not know rather than half-reading the file.
+const Format = 1
+
 // Graph is one survey's model of a network.
 type Graph struct {
+	// Format is the survey.json layout. Snapshots written before Carta 1 have
+	// none and are format 1: the layout did not change at 1.0, only the promise.
+	Format    int               `json:"format"`
 	SurveyID  string            `json:"survey_id"`
 	StartedAt time.Time         `json:"started_at"`
 	Vantage   Vantage           `json:"vantage"`

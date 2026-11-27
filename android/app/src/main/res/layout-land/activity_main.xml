@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Landscape: one row of chrome. On a phone on its side the thumbs are at the
      sides, not the bottom, and every row of chrome comes out of a map that is
-     already short — so the status and the actions share the top bar. Same ids
+     already short, so the status and the actions share the top bar. Same ids
      as the portrait layout. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -16,29 +16,23 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:minHeight="56dp"
+        android:minHeight="60dp"
         android:orientation="horizontal"
-        android:paddingStart="16dp"
-        android:paddingEnd="12dp">
-
-        <ImageView
-            android:layout_width="20dp"
-            android:layout_height="20dp"
-            android:layout_marginEnd="10dp"
-            android:importantForAccessibility="no"
-            android:src="@drawable/carta_logo"
-            app:tint="@color/fg" />
+        android:paddingStart="22dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="12dp"
+        android:paddingBottom="4dp">
 
         <TextView
             style="@style/Carta.Brand"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginEnd="16dp"
+            android:layout_marginEnd="22dp"
             android:text="@string/brand" />
 
         <TextView
             android:id="@+id/status"
-            style="@style/Carta.Mono"
+            style="@style/Carta.Status"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
@@ -70,19 +64,29 @@
             style="@style/Carta.Button.Primary"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:minWidth="96dp"
+            android:minHeight="46dp"
             android:text="@string/survey" />
     </LinearLayout>
 
-    <com.google.android.material.progressindicator.LinearProgressIndicator
-        android:id="@+id/progress"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:visibility="invisible"
-        app:indicatorColor="@color/fg"
-        app:trackColor="@color/rule"
-        app:trackCornerRadius="0dp"
-        app:trackThickness="2dp" />
+        android:layout_height="wrap_content">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:background="@color/rule" />
+
+        <com.google.android.material.progressindicator.LinearProgressIndicator
+            android:id="@+id/progress"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:visibility="invisible"
+            app:indicatorColor="@color/fg"
+            app:trackColor="@color/rule"
+            app:trackCornerRadius="0dp"
+            app:trackThickness="2dp" />
+    </FrameLayout>
 
     <include layout="@layout/content_area" />
 </LinearLayout>

@@ -1,810 +1,572 @@
-/* carta UI.
- *
- * A force-directed graph in about two hundred lines of canvas, rather than a
- * graph library. Three reasons: the binary stays small enough to live on a
- * stick, nothing is fetched at runtime so the tool works air-gapped, and the
- * drawing rules ARE the product — shape and stroke carry how well each device
- * is known, which is the one thing a generic graph library would flatten away.
- */
+// Carta's survey view, design D (docs/DESIGN_SYSTEM_CARTA.md). The same page
+// is `carta ui` in a browser and the survey view inside the Android app.
+//
+// Hooks the Android app relies on, which must not change name or meaning:
+//   ?embedded          the app draws the top and bottom bars; the page does not
+//   ?tab=drift         open on the Drift tab (after a comparison); ?tab=findings
+//                      and ?tab=devices open those tabs
+//   showTab(name)      the app opens a tab (the snackbar's View)
+//   carta.collapse()   Back: lower the sheet; true if anything was open
+'use strict';
 
-let survey = null;
-let nodes = [];
-let links = [];
-let selected = null;
-let view = { x: 0, y: 0, k: 1 };
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+if (params.has('embedded')) document.body.classList.add('embedded');
 
-// ?embedded: shown inside a host app that draws its own branded chrome.
-if (new URLSearchParams(location.search).has('embedded')) {
-  document.body.classList.add('embedded');
+let survey = null, drift = null;
+const state = { selected: null, note: '', tab: 'device', filter: '', sheet: 'peek', hovered: null };
+
+// Everything here came off an untrusted network: hostnames, banners, mDNS
+// names. Every value goes through esc() before it touches innerHTML.
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 }
 
-const canvas = document.getElementById('map');
-const ctx = canvas.getContext('2d');
+/* ---------- reading claims ---------- */
 
-fetch('api/survey').then(r => r.json()).then(data => {
-  survey = data;
-  build();
-  layout();
-  draw();
-  renderVantage();
-  renderCoverage();
-  renderFindings();
-  renderList();
-  // The vantage and coverage text just changed the sheet's peek height.
-  // Re-measure here rather than trust a resize callback, which a page that is
-  // not being drawn (a background tab) never gets.
-  if (sheetMode) {
-    measureSheet();
-    setSheet(sheet.state, false);
-    if (!userMoved) fit();
-    draw();
-  }
-});
+const RANK = { asserted: 4, observed: 3, inferred: 2, weak: 1, unknown: 0 };
+const rank = c => RANK[c] ?? 0;
 
-// Drift is optional: only a host that was asked to compare two surveys serves
-// it, and the tab stays hidden everywhere else.
-fetch('api/drift').then(r => r.ok ? r.json() : null).then(d => {
-  if (!d) return;
-  renderDrift(d);
-  // ?tab=drift: the host just ran a comparison and the answer is the point.
-  if (new URLSearchParams(location.search).get('tab') === 'drift') showTab('drift');
-}).catch(() => {});
-
-/* ---------- model → drawable ---------- */
-
-function build() {
-  const alive = (survey.entities || []).filter(e => best(e, 'alive') === 'yes');
-  nodes = alive.map((e, i) => ({
-    e,
-    id: e.id,
-    label: labelOf(e),
-    sub: sublabelOf(e),
-    kind: kindOf(e),
-    // Seeded on a circle rather than at random: an identical survey should
-    // produce an identical picture, or two screenshots taken a minute apart
-    // look like different networks.
-    x: Math.cos((i / alive.length) * Math.PI * 2) * 220,
-    y: Math.sin((i / alive.length) * Math.PI * 2) * 220,
-    vx: 0, vy: 0,
-    r: 0,
-  }));
-
-  const index = new Map(nodes.map(n => [n.id, n]));
-  links = (survey.edges || [])
-    .filter(ed => ed.kind === 'gateway-of')
-    .map(ed => ({ a: index.get(ed.from), b: index.get(ed.to), conf: ed.confidence }))
-    .filter(l => l.a && l.b && l.a !== l.b);
-
-  for (const n of nodes) n.r = n.kind === 'infra' ? 13 : 9;
-
-  const prefix = (survey.vantage || {}).prefix || 'this network';
-  canvas.setAttribute('aria-label',
-    `Map of ${nodes.length} ${nodes.length === 1 ? 'device' : 'devices'} on ${prefix}. The All tab lists them.`);
-}
-
-function best(e, key) {
-  let bv = '', bc = -1;
+function bestClaim(e, key) {
+  let best = null;
   for (const c of e.claims || []) {
-    if (c.key !== key) continue;
-    const rank = confRank(c.confidence);
-    if (rank > bc) { bv = c.value; bc = rank; }
+    if (c.key === key && c.value && (!best || rank(c.confidence) > rank(best.confidence))) best = c;
   }
-  return bv;
+  return best;
 }
+const best = (e, key) => (bestClaim(e, key) || {}).value || '';
+const ids = (e, kind) => (e.identities || []).filter(i => i.startsWith(kind + ':')).map(i => i.slice(kind.length + 1));
+const isAlive = e => best(e, 'alive') === 'yes';
+const labelOf = e => best(e, 'hostname') || best(e, 'label') || ids(e, 'ip')[0] || ids(e, 'mac')[0] || e.id;
+const devices = () => (survey?.entities || []).filter(isAlive);
 
-function bestWithConf(e, key) {
-  let bv = '', bc = -1, conf = '';
-  for (const c of e.claims || []) {
-    if (c.key !== key) continue;
-    const rank = confRank(c.confidence);
-    if (rank > bc) { bv = c.value; bc = rank; conf = c.confidence; }
-  }
-  return { value: bv, conf };
-}
-
-function confRank(c) {
-  return { asserted: 4, observed: 3, inferred: 2, weak: 1, unknown: 0 }[c] ?? 0;
-}
-
-function ids(e, kind) {
-  return (e.identities || []).filter(i => i.startsWith(kind + ':')).map(i => i.slice(kind.length + 1));
-}
-
-function labelOf(e) {
-  const host = best(e, 'hostname') || best(e, 'label');
-  if (host) return host;
-  const ip = ids(e, 'ip')[0];
-  return ip || e.id;
-}
-
-// sublabelOf is what a device is, with weak guesses marked as guesses.
+// sublabelOf is what a device is, with guesses marked as guesses.
 function sublabelOf(e) {
-  const cls = bestWithConf(e, 'class');
-  const vendor = bestWithConf(e, 'vendor');
-  if (cls.value && confRank(cls.conf) > confRank('weak')) return cls.value;
-  if (cls.value) return cls.value + '?';
-  if (vendor.value) return vendor.value + (confRank(vendor.conf) > confRank('inferred') ? '' : '?');
+  const cls = bestClaim(e, 'class'), vendor = bestClaim(e, 'vendor');
+  if (cls && rank(cls.confidence) > rank('weak')) return cls.value;
+  if (cls) return cls.value + '?';
+  if (vendor) return vendor.value + (rank(vendor.confidence) > rank('inferred') ? '' : '?');
   return 'unidentified';
 }
 
+// kindOf is how a device is drawn. A weak class is a guess, not an
+// identification: drawing it with the weight of a device that announced its
+// own model is the flattening this tool exists to avoid.
 function kindOf(e) {
-  const cls = bestWithConf(e, 'class');
+  const cls = bestClaim(e, 'class');
+  if (cls && (cls.value === 'router / gateway' || cls.value === 'survey vantage')) return 'infra';
   const host = best(e, 'hostname');
-  if (cls.value === 'router / gateway' || cls.value === 'survey vantage') return 'infra';
-  // A weak class is a guess, not an identification. "Personal device
-  // (randomised MAC)" is a reasonable hunch about an address that told us
-  // nothing, and drawing it with the same weight as a device that announced
-  // its own model number is exactly the flattening this tool exists to avoid.
-  const identified = cls.value && confRank(cls.conf) > confRank('weak');
+  const identified = cls && rank(cls.confidence) > rank('weak');
   if (!host && !identified) return 'unknown';
   if (!host || !identified) return 'partial';
   return 'named';
 }
 
-/* ---------- layout ----------
- * Plain spring-and-repulsion, run to a fixed iteration count up front rather
- * than animated forever: a map that keeps drifting is a map you cannot point
- * at while someone photographs the screen.
- */
-function layout() {
-  const iterations = 400;
-  for (let step = 0; step < iterations; step++) {
-    const t = 1 - step / iterations;
-    for (const n of nodes) {
-      for (const m of nodes) {
-        if (n === m) continue;
-        let dx = n.x - m.x, dy = n.y - m.y;
-        let d2 = dx * dx + dy * dy || 0.01;
-        const f = 2400 / d2;
-        n.vx += dx * f * 0.02;
-        n.vy += dy * f * 0.02;
-      }
-      // Gentle pull to the origin keeps disconnected devices — the common case
-      // on a flat network where everything hangs off one gateway — on screen.
-      n.vx -= n.x * 0.002;
-      n.vy -= n.y * 0.002;
-    }
-    for (const l of links) {
-      const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y;
-      const d = Math.hypot(dx, dy) || 0.01;
-      const target = 130;
-      const f = (d - target) * 0.01;
-      l.a.vx += dx / d * f; l.a.vy += dy / d * f;
-      l.b.vx -= dx / d * f; l.b.vy -= dy / d * f;
-    }
-    for (const n of nodes) {
-      n.x += n.vx * t; n.y += n.vy * t;
-      n.vx *= 0.82; n.vy *= 0.82;
-    }
-  }
-  fit();
+/* ---------- loading ---------- */
+
+fetch('api/survey').then(r => r.json()).then(s => {
+  survey = s;
+  // The gateway starts selected, so the panel has something to show: the
+  // device classed as the router, or else the one at the gateway's address.
+  const gw = devices().find(e => kindOf(e) === 'infra' && labelOf(e) !== s.vantage?.host)
+    || devices().find(e => ids(e, 'ip').includes(s.vantage?.gateway));
+  state.selected = gw || null;
+  build();
+  arrange();
+  const tab = params.get('tab');
+  if (tab === 'findings' || tab === 'devices' || (tab === 'drift' && drift)) showTab(tab);
+}).catch(() => { $('count').textContent = 'No survey'; });
+
+// The Drift tab exists only when there is a comparison to show (the Android
+// app serves one after Compare); `carta ui` has none.
+fetch('api/drift').then(r => (r.ok ? r.json() : null)).then(d => {
+  if (!d) return;
+  drift = d;
+  $('tab-drift').classList.remove('hidden');
+  $('nDrift').textContent = (d.changes || []).length;
+  if (survey && params.get('tab') === 'drift') showTab('drift');
+}).catch(() => {});
+
+/* ---------- summary ---------- */
+
+const when = iso => new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const idDate = id => { // a survey id is its UTC start, 20261116T091400Z
+  const m = /^(\d{4})(\d\d)(\d\d)T(\d\d)(\d\d)(\d\d)Z$/.exec(id || '');
+  return m ? when(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}Z`) : id;
+};
+const cov = () => (survey.coverage || [])[0];
+const quiet = () => /quiet survey/.test((cov()?.notes || []).join(' '));
+
+function stageName(id) {
+  return { orient: 'orienting', listen: 'listening', sweep: 'sweeping', probe: 'probing services',
+    nbns: 'asking NetBIOS', rdns: 'reverse DNS', resolve: 'resolving' }[id] || id;
 }
 
-// fit frames the whole graph in the canvas.
-//
-// It refuses to run against a zero-sized canvas. The page can load while its
-// pane is hidden or still being laid out, and measuring then yields a scale of
-// zero — a blank map with every node present and correct, which is the most
-// confusing possible failure. fitted stays false until a real measurement
-// happens, and draw() retries.
-let fitted = false;
-let userMoved = false;
+function renderSummary() {
+  const v = survey.vantage || {}, c = cov();
+  const n = devices().length;
+  $('count').textContent = `${n} ${n === 1 ? 'device' : 'devices'}`;
+  $('prefix').textContent = 'on ' + (v.prefix || 'this network');
+  let took = '';
+  if (c?.started_at && c?.ended_at) took = Math.round((new Date(c.ended_at) - new Date(c.started_at)) / 1000) + ' s';
+  const facts = [['from', `${v.ip || '?'} on ${v.interface || '?'}`], ['started', when(survey.started_at)], ['took', took || 'unknown'], ['gateway', v.gateway || 'unknown']];
+  $('facts').innerHTML = facts.map(([k, val]) => `<dt>${esc(k)}</dt><dd>${esc(val)}</dd>`).join('');
+  $('factline').innerHTML = `from <b>${esc(v.ip || '?')}</b> on ${esc(v.interface || '?')}, ${esc(new Date(survey.started_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }))}` +
+    (took ? `, took <b>${esc(took)}</b>` : '');
 
+  // One dot per host address in the prefix, in address order.
+  const dots = [];
+  let ans = 0, sil = 0, unr = 0;
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)\/\d+$/.exec(c?.prefix || '');
+  if (c && m) {
+    const base = ((+m[1] << 24) >>> 0) + (+m[2] << 16) + (+m[3] << 8) + +m[4];
+    const heard = new Set(devices().flatMap(e => ids(e, 'ip')));
+    for (let i = 0; i < c.addrs_total; i++) {
+      const a = base + i + 1;
+      const ip = [a >>> 24, (a >>> 16) & 255, (a >>> 8) & 255, a & 255].join('.');
+      if (heard.has(ip)) { dots.push('a'); ans++; }
+      else if (i < c.addrs_swept) { dots.push(''); sil++; }
+      else { dots.push('u'); unr++; }
+    }
+  }
+  $('matrix').innerHTML = dots.map(d => `<i class="${d}"></i>`).join('');
+  $('matrix').classList.toggle('wide', dots.length > 256);
+  $('matrix').setAttribute('aria-label', `${ans} addresses answered, ${sil} were asked and stayed silent, ${unr} were never asked.`);
+  $('counts').innerHTML = `<span><b>${ans}</b>answered</span><span><b>${sil}</b>silent</span><span><b>${unr}</b>unreached</span>`;
+  $('covnote').textContent = quiet()
+    ? 'A quiet survey asks nothing, so every address it did not hear is unreached.'
+    : 'One dot per address. Silent means it did not answer: unknown, not empty.';
+
+  const cut = survey.meta?.cut_short;
+  $('status').innerHTML = cut
+    ? `<span>Stopped during ${esc(stageName(cut))}</span><span class="tag">Stopped early</span>`
+    : `<span>${quiet() ? 'Quiet survey: nothing was sent' : 'Survey complete'}</span>`;
+  if (cut) $('factline').insertAdjacentHTML('beforeend', ' <span class="tag">Stopped early</span>');
+}
+
+/* ---------- map ---------- */
+
+const svg = $('map'), NS = 'http://www.w3.org/2000/svg';
+let nodes = [], links = [], view = { k: 1, x: 0, y: 0 }, fitted = false, userMoved = false;
+
+function build() {
+  renderSummary();
+  const alive = devices();
+  nodes = alive.map((e, i) => {
+    // Seeded on a circle, not at random: the same survey must give the same
+    // picture, or two screenshots look like two networks.
+    const a = (i / alive.length) * Math.PI * 2;
+    return { e, id: e.id, label: labelOf(e), kind: kindOf(e), x: Math.cos(a) * 220, y: Math.sin(a) * 220, vx: 0, vy: 0 };
+  });
+  const index = new Map(nodes.map(n => [n.id, n]));
+  links = (survey.edges || []).filter(ed => ed.kind === 'gateway-of')
+    .map(ed => ({ a: index.get(ed.from), b: index.get(ed.to) })).filter(l => l.a && l.b && l.a !== l.b);
+  layout();
+  svg.setAttribute('aria-label', `Map of ${alive.length} ${alive.length === 1 ? 'device' : 'devices'} on ${survey.vantage?.prefix || 'this network'}. The Devices tab lists them.`);
+  $('nDevices').textContent = alive.length;
+  const fs = survey.findings || [];
+  $('nFindings').textContent = fs.length;
+  $('nFindings').classList.toggle('risk', fs.some(f => f.severity === 'risk'));
+  render();
+}
+
+// Spring and repulsion, run to a fixed count up front rather than animated:
+// a map that keeps drifting cannot be pointed at.
+function layout() {
+  for (let s = 0; s < 400; s++) {
+    const t = 1 - s / 400;
+    for (const n of nodes) {
+      for (const o of nodes) {
+        if (n === o) continue;
+        const dx = n.x - o.x, dy = n.y - o.y, d2 = dx * dx + dy * dy || 0.01, f = 2400 / d2;
+        n.vx += dx * f * 0.02; n.vy += dy * f * 0.02;
+      }
+      n.vx -= n.x * 0.002; n.vy -= n.y * 0.002;
+    }
+    for (const l of links) {
+      const dx = l.b.x - l.a.x, dy = l.b.y - l.a.y, d = Math.hypot(dx, dy) || 0.01, f = (d - 130) * 0.01;
+      l.a.vx += dx / d * f; l.a.vy += dy / d * f; l.b.vx -= dx / d * f; l.b.vy -= dy / d * f;
+    }
+    for (const n of nodes) { n.x += n.vx * t; n.y += n.vy * t; n.vx *= 0.82; n.vy *= 0.82; }
+  }
+}
+
+// The part of the map not covered by the sheet, in the map's own pixels. It
+// uses the height the sheet is going to, not the height it has now: in the
+// middle of its slide the sheet is neither, and framing the map against it
+// would leave devices under the sheet once it settles.
+function visibleHeight() {
+  const h = svg.clientHeight;
+  return document.body.classList.contains('sheet') ? h - sheetHeights()[state.sheet] : h;
+}
+
+// fit frames the map in what is visible, leaving room on the right for labels.
 function fit() {
-  // In the sheet layout the panel's peek covers the bottom of the canvas, so
-  // the map is framed in the part that is actually visible.
-  const w = canvas.clientWidth, h = canvas.clientHeight - mapInset();
+  const w = svg.clientWidth, h = visibleHeight();
   if (!nodes.length || w < 2 || h < 2) return false;
-
+  const narrow = document.body.classList.contains('sheet');
+  const [l, r, t, b] = narrow ? [26, 40, 22, 22] : [60, 190, 70, 80];
   const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
-  const minX = Math.min(...xs), maxX = Math.max(...xs);
-  const minY = Math.min(...ys), maxY = Math.max(...ys);
-  const k = Math.min(w / (maxX - minX + 180), h / (maxY - minY + 180), 1.6);
-  if (!isFinite(k) || k <= 0) return false;
-
+  const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+  const k = Math.min((w - l - r) / Math.max(maxX - minX, 1), (h - t - b) / Math.max(maxY - minY, 1), 1.8);
+  if (!(k > 0 && isFinite(k))) return false;
   view.k = k;
-  view.x = w / 2 - ((minX + maxX) / 2) * k;
-  view.y = h / 2 - ((minY + maxY) / 2) * k;
+  view.x = l + ((w - l - r) - (maxX - minX) * k) / 2 - minX * k;
+  view.y = t + ((h - t - b) - (maxY - minY) * k) / 2 - minY * k;
   fitted = true;
   return true;
 }
 
-/* ---------- drawing ---------- */
+const at = n => [n.x * view.k + view.x, n.y * view.k + view.y];
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+// SVG text ignores the reader's text size; the page's root font size carries
+// it (a browser setting, or Android's font scale in the app), so map labels
+// are scaled by it to follow.
+const labelSize = () => 12 * Math.max(1, parseFloat(getComputedStyle(document.documentElement).fontSize) / 16 || 1);
+const measure = (() => {
+  const ctx = document.createElement('canvas').getContext('2d');
+  return s => { ctx.font = `${labelSize()}px ${css('--sans')}`; return ctx.measureText(s).width; };
+})();
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  (parent || svg).append(e);
+  return e;
+}
 
 function draw() {
-  if (!fitted) fit();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = canvas.clientWidth * dpr;
-  canvas.height = canvas.clientHeight * dpr;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.clearRect(0, 0, canvas.clientWidth, canvas.clientHeight);
-
-  const css = getComputedStyle(document.documentElement);
-  const colour = {
-    named: css.getPropertyValue('--named').trim(),
-    partial: css.getPropertyValue('--partial').trim(),
-    unknown: css.getPropertyValue('--unknown').trim(),
-    infra: css.getPropertyValue('--infra').trim(),
-    rule: css.getPropertyValue('--rule').trim(),
-    dim: css.getPropertyValue('--dim').trim(),
-    fg: css.getPropertyValue('--fg').trim(),
-  };
-  // The canvas cannot read a CSS variable in ctx.font, so the stack is copied
-  // out of the stylesheet: the map's labels use the same bundled face as the
-  // rest of the page.
-  const mono = css.getPropertyValue('--mono').trim();
-  // Canvas text ignores the reader's text size; the page's root font size
-  // carries it (a browser setting, or Android's font scale in the WebView), so
-  // the labels follow it too.
-  const zoom = Math.max(1, parseFloat(css.fontSize) / 16 || 1);
-
-  ctx.save();
-  ctx.translate(view.x, view.y);
-  ctx.scale(view.k, view.k);
-
+  if (!fitted && !fit()) return;
+  svg.textContent = '';
+  const W = svg.clientWidth, H = visibleHeight();
+  const sel = state.selected && nodes.find(n => n.e === state.selected);
   for (const l of links) {
-    ctx.beginPath();
-    ctx.moveTo(l.a.x, l.a.y);
-    ctx.lineTo(l.b.x, l.b.y);
-    ctx.strokeStyle = colour.rule;
-    ctx.lineWidth = 1;
-    // An inferred relationship is drawn dashed. The gateway edges on a flat
-    // network are inferred from one host's routing table, and the picture says
-    // so rather than implying it was verified per device.
-    ctx.setLineDash(confRank(l.conf) >= 3 ? [] : [3, 3]);
-    ctx.stroke();
-    ctx.setLineDash([]);
+    const [x1, y1] = at(l.a), [x2, y2] = at(l.b);
+    el('line', { x1, y1, x2, y2, stroke: css('--thread'), 'stroke-width': 1 });
   }
-
+  const taken = [];
   for (const n of nodes) {
-    ctx.beginPath();
-    ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-    if (n.kind === 'unknown') {
-      ctx.setLineDash([3, 3]);
-      ctx.strokeStyle = colour.unknown;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.setLineDash([]);
-    } else if (n.kind === 'partial') {
-      ctx.strokeStyle = colour.partial;
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = n.kind === 'infra' ? colour.infra : colour.named;
-      ctx.fill();
-    }
-    if (n === selected) {
-      ctx.beginPath();
-      ctx.arc(n.x, n.y, n.r + 5, 0, Math.PI * 2);
-      ctx.strokeStyle = colour.fg;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    }
-
-    ctx.font = `${11 * zoom}px ${mono}`;
-    ctx.fillStyle = n.kind === 'unknown' ? colour.dim : colour.fg;
-    ctx.textAlign = 'center';
-    ctx.fillText(n.label, n.x, n.y + n.r + 13 * zoom);
-
-    ctx.font = `${9 * zoom}px ${mono}`;
-    ctx.fillStyle = colour.dim;
-    ctx.fillText(n.sub, n.x, n.y + n.r + 24 * zoom);
+    const [x, y] = at(n), r = n.kind === 'infra' ? 7 : 4.5, isSel = n === sel;
+    n.r = r;
+    taken.push([x - r - 3, y - r - 3, x + r + 3, y + r + 3]);
+    const g = el('g', { class: 'dev', 'data-id': n.id });
+    el('circle', { cx: x, cy: y, r: 16, fill: 'transparent' }, g); // a wider target than the dot
+    const col = isSel ? css('--red') : css('--fg');
+    if (isSel) el('circle', { cx: x, cy: y, r: r + 9, fill: 'none', stroke: css('--red'), 'stroke-width': 1 }, g);
+    if (n.kind === 'unknown') el('circle', { cx: x, cy: y, r, fill: 'none', stroke: isSel ? col : css('--amber'), 'stroke-width': 1.3, 'stroke-dasharray': '2 2' }, g);
+    else if (n.kind === 'partial') el('circle', { cx: x, cy: y, r, fill: 'none', stroke: col, 'stroke-width': 1.3 }, g);
+    else el('circle', { cx: x, cy: y, r, fill: col }, g);
   }
-  ctx.restore();
+  // Labels: right of the dot, else left, below or above, slid inside the map.
+  // One that collides everywhere shows only when hovered or selected, so text
+  // never prints over text.
+  const order = [sel, state.hovered].filter(Boolean);
+  for (const n of nodes) if (!order.includes(n)) order.push(n);
+  for (const n of order) {
+    const [x, y] = at(n), w = measure(n.label), h = labelSize() + 2, must = n === sel || n === state.hovered;
+    const gap = n.r + (n === sel ? 14 : 8);
+    const cx = Math.min(Math.max(x - w / 2, 6), W - 6 - w);
+    const cands = [[x + gap, y], [x - gap - w, y], [cx, y + gap + 8], [cx, y - gap - 2]];
+    for (let i = 0; i < cands.length; i++) {
+      const [lx, ly] = cands[i], box = [lx - 2, ly - h / 2 - 1, lx + w + 2, ly + h / 2 + 1];
+      const inside = box[0] >= 4 && box[2] <= W - 4 && box[1] >= 4 && box[3] <= H - 4;
+      const clear = !taken.some(o => box[0] < o[2] && o[0] < box[2] && box[1] < o[3] && o[1] < box[3]);
+      if ((inside && clear) || (must && i === cands.length - 1)) {
+        const t = el('text', { x: lx, y: ly + labelSize() / 3, fill: must ? css('--fg') : css('--dim'), 'font-size': labelSize() });
+        t.textContent = n.label; // textContent: a device's name is untrusted
+        taken.push(box);
+        break;
+      }
+    }
+  }
 }
 
-/* ---------- interaction ---------- */
+function hit(px, py) {
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const [x, y] = at(nodes[i]);
+    if (Math.hypot(x - px, y - py) < (nodes[i].r || 5) + 12) return nodes[i];
+  }
+  return null;
+}
 
-// Pointer events rather than mouse events, so the same code handles a mouse,
-// a finger and a pen. Two fingers on the canvas pinch-zoom.
-let dragging = null, panning = null;
-const pointers = new Map();
-let pinch = null;
-
-canvas.addEventListener('pointerdown', ev => {
-  // Capture keeps a drag alive when the finger leaves the canvas; it throws for
-  // a pointer the browser no longer tracks, which must not cost the gesture.
-  try { canvas.setPointerCapture(ev.pointerId); } catch (_) {}
-  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-  if (pointers.size === 2) {
-    dragging = null; panning = null;
-    pinch = { d: pinchDistance(), k: view.k };
-    userMoved = true;
+// One finger or the mouse pans; two fingers pinch; a tap without movement
+// selects; the wheel zooms about the pointer.
+const pts = new Map();
+let pan = null, pinch = null;
+const local = ev => { const b = svg.getBoundingClientRect(); return [ev.clientX - b.left, ev.clientY - b.top]; };
+svg.addEventListener('pointerdown', ev => {
+  try { svg.setPointerCapture(ev.pointerId); } catch (_) {}
+  pts.set(ev.pointerId, local(ev));
+  if (pts.size === 1) pan = { start: local(ev), vx: view.x, vy: view.y, moved: false };
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a[0] - b[0], a[1] - b[1]), k: view.k, vx: view.x, vy: view.y, c: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2] }; pan = null; }
+  svg.classList.add('grabbing');
+});
+svg.addEventListener('pointermove', ev => {
+  const p = local(ev);
+  if (!pts.has(ev.pointerId)) {
+    const h = hit(...p);
+    if (h !== state.hovered) { state.hovered = h; draw(); }
     return;
   }
-  const p = toModel(ev);
-  // A fingertip is far less precise than a cursor, so a touch hits wider.
-  const slop = ev.pointerType === 'touch' ? 18 : 6;
-  const hit = nodes.find(n => Math.hypot(n.x - p.x, n.y - p.y) < n.r + slop);
-  if (hit) {
-    dragging = hit;
-    select(hit);
-  } else {
-    panning = { x: ev.clientX - view.x, y: ev.clientY - view.y };
-    userMoved = true;
+  pts.set(ev.pointerId, p);
+  if (pinch && pts.size === 2) {
+    const [a, b] = [...pts.values()], k = Math.min(5, Math.max(0.3, pinch.k * Math.hypot(a[0] - b[0], a[1] - b[1]) / pinch.d));
+    view.x = pinch.c[0] - (pinch.c[0] - pinch.vx) * k / pinch.k; view.y = pinch.c[1] - (pinch.c[1] - pinch.vy) * k / pinch.k; view.k = k;
+    userMoved = true; draw();
+  } else if (pan) {
+    const dx = p[0] - pan.start[0], dy = p[1] - pan.start[1];
+    if (Math.hypot(dx, dy) > 6) pan.moved = true;
+    if (pan.moved) { view.x = pan.vx + dx; view.y = pan.vy + dy; userMoved = true; draw(); }
   }
 });
-
-canvas.addEventListener('pointermove', ev => {
-  if (!pointers.has(ev.pointerId)) return;
-  pointers.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
-  if (pinch && pointers.size === 2) {
-    const [a, b] = [...pointers.values()];
-    const rect = canvas.getBoundingClientRect();
-    zoomAt((a.x + b.x) / 2 - rect.left, (a.y + b.y) / 2 - rect.top, pinch.k * pinchDistance() / pinch.d / view.k);
-  } else if (dragging) {
-    const p = toModel(ev);
-    dragging.x = p.x; dragging.y = p.y;
-    draw();
-  } else if (panning) {
-    view.x = ev.clientX - panning.x;
-    view.y = ev.clientY - panning.y;
-    draw();
-  }
-});
-
-function endPointer(ev) {
-  pointers.delete(ev.pointerId);
-  if (pointers.size < 2) pinch = null;
-  if (pointers.size === 0) { dragging = null; panning = null; }
-}
-canvas.addEventListener('pointerup', endPointer);
-canvas.addEventListener('pointercancel', endPointer);
-
-function pinchDistance() {
-  const [a, b] = [...pointers.values()];
-  return Math.max(Math.hypot(a.x - b.x, a.y - b.y), 1);
-}
-
-function zoomAt(mx, my, factor) {
-  view.x = mx - (mx - view.x) * factor;
-  view.y = my - (my - view.y) * factor;
-  view.k *= factor;
-  draw();
-}
-
-canvas.addEventListener('wheel', ev => {
-  ev.preventDefault();
-  userMoved = true;
-  const rect = canvas.getBoundingClientRect();
-  zoomAt(ev.clientX - rect.left, ev.clientY - rect.top, ev.deltaY < 0 ? 1.1 : 0.9);
-}, { passive: false });
-
-// A canvas that gains its size after load — a hidden pane being shown, a split
-// being dragged — has to be re-framed, but only while the view is still the one
-// carta chose. Once someone has panned or zoomed, the framing is theirs.
-new ResizeObserver(() => {
-  if (!userMoved) fit();
-  draw();
-}).observe(canvas);
-
-// The bundled face loads after the first paint (font-display: swap), and a
-// canvas does not repaint itself when it arrives.
-// It also reflows the sheet's head, so the peek height is measured again.
-if (document.fonts) document.fonts.addEventListener('loadingdone', () => {
-  if (sheetMode) { measureSheet(); setSheet(sheet.state, false); }
-  draw();
-});
-
-window.addEventListener('resize', () => {
-  if (!userMoved) fit();
-  draw();
-});
-
-function toModel(ev) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: (ev.clientX - rect.left - view.x) / view.k,
-    y: (ev.clientY - rect.top - view.y) / view.k,
-  };
-}
-
-// focusPanel: the choice came from the keyboard or the list, so focus follows
-// it to the device's details instead of staying on a row that is now hidden.
-function select(node, focusPanel) {
-  selected = node;
-  renderDevice(node.e);
-  showTab('device');
-  if (sheetMode && sheet.state === 'peek') setSheet('half', true);
-  keepVisible(node);
-  draw();
-  if (focusPanel) document.getElementById('device').focus();
-}
-
-/* ---------- layout: compact and sheet ----------
-
-   compact (?embedded, or a narrow window): the vantage line goes to the
-   panel's head and the legend behind a button on the map, so the header no
-   longer eats the map's height.
-
-   sheet (a narrow window): the map is full-bleed and the panel slides over it,
-   snapping to peek (handle, head, tabs), half or full. Only the grip — the
-   handle and the head — drags the sheet: the canvas keeps pan and pinch, and
-   the panel's body scrolls.
-
-   The elements are moved, not duplicated, so there is one vantage line and one
-   legend whichever layout is showing. */
-
-const narrow = matchMedia('(max-width: 760px)');
-let compact = false, sheetMode = false;
-const panel = document.getElementById('panel');
-const grip = document.getElementById('grip');
-const handle = document.getElementById('handle');
-const sheet = { state: 'peek', heights: { peek: 0, half: 0, full: 0 } };
-const SHEET_STATES = ['peek', 'half', 'full'];
-
-function arrange() {
-  compact = document.body.classList.contains('embedded') || narrow.matches;
-  sheetMode = narrow.matches;
-  document.body.classList.toggle('compact', compact);
-  document.body.classList.toggle('sheet', sheetMode);
-
-  const bar = document.querySelector('.bar');
-  const head = document.getElementById('panelhead');
-  const vantage = document.getElementById('vantage');
-  const legend = document.querySelector('.legend');
-  const coverage = document.getElementById('coverage');
-  if (compact) {
-    head.prepend(vantage);
-    document.getElementById('legendcard').append(legend);
-  } else {
-    bar.querySelector('.brand').after(vantage);
-    vantage.after(legend);
-    showLegend(false);
-  }
-  if (sheetMode) head.append(coverage);
-  else document.querySelector('.graph').append(coverage);
-
-  if (sheetMode) {
-    measureSheet();
-    setSheet(sheet.state, false);
-  } else {
-    panel.style.transform = '';
-    panel.style.height = '';
-  }
-  if (!userMoved) fitted = false;
-  draw();
-}
-
-function measureSheet() {
-  const h = document.querySelector('main').clientHeight;
-  const peek = grip.offsetHeight + document.querySelector('.tabs').offsetHeight;
-  sheet.heights = {
-    peek,
-    half: Math.max(peek, Math.round(h * 0.5)),
-    full: Math.max(peek, h - 16),
-  };
-  panel.style.height = sheet.heights.full + 'px';
-}
-
-function setSheet(state, animate) {
-  sheet.state = state;
-  panel.classList.toggle('animating', !!animate);
-  panel.style.transform = 'translateY(' + (sheet.heights.full - sheet.heights[state]) + 'px)';
-  handle.setAttribute('aria-expanded', state !== 'peek');
-  handle.setAttribute('aria-label', 'Details panel, ' +
-    (state === 'peek' ? 'collapsed' : state === 'half' ? 'half open' : 'open'));
-}
-
-function mapInset() {
-  return sheetMode ? sheet.heights.peek : 0;
-}
-
-// A selected node must not end up under the sheet that just rose to show it.
-function keepVisible(node) {
-  if (!sheetMode) return;
-  const visible = canvas.clientHeight - sheet.heights[sheet.state];
-  const y = view.y + node.y * view.k;
-  if (y > visible - 40 || y < 20) {
-    view.y += visible / 2 - y;
-    userMoved = true;
-  }
-}
-
-let sheetDrag = null, sheetJustDragged = false;
-
-grip.addEventListener('pointerdown', ev => {
-  if (!sheetMode) return;
-  const offset = sheet.heights.full - sheet.heights[sheet.state];
-  sheetDrag = { y0: ev.clientY, offset0: offset, offset, moved: false, lastY: ev.clientY, lastT: performance.now(), v: 0 };
-  try { grip.setPointerCapture(ev.pointerId); } catch (_) {}
-});
-
-grip.addEventListener('pointermove', ev => {
-  const d = sheetDrag;
-  if (!d) return;
-  const dy = ev.clientY - d.y0;
-  // A few pixels of wobble is a tap on the handle, not a drag.
-  if (!d.moved && Math.abs(dy) < 6) return;
-  d.moved = true;
-  panel.classList.remove('animating');
-  const max = sheet.heights.full - sheet.heights.peek;
-  d.offset = Math.min(max, Math.max(0, d.offset0 + dy));
-  panel.style.transform = 'translateY(' + d.offset + 'px)';
-  const now = performance.now();
-  if (now > d.lastT) d.v = (ev.clientY - d.lastY) / (now - d.lastT);
-  d.lastY = ev.clientY;
-  d.lastT = now;
-});
-
-// On release the sheet settles at the nearest height, or — after a flick —
-// at the next height in the flick's direction from where the finger let go.
-function endSheetDrag() {
-  const d = sheetDrag;
-  sheetDrag = null;
-  if (!d || !d.moved) return;
-  sheetJustDragged = true;
-  setTimeout(() => { sheetJustDragged = false; }, 0);
-  const shown = sheet.heights.full - d.offset;
-  let target = nearestState(shown);
-  if (d.v < -0.5) target = SHEET_STATES.find(st => sheet.heights[st] > shown) || 'full';
-  else if (d.v > 0.5) target = [...SHEET_STATES].reverse().find(st => sheet.heights[st] < shown) || 'peek';
-  setSheet(target, true);
-}
-grip.addEventListener('pointerup', endSheetDrag);
-grip.addEventListener('pointercancel', endSheetDrag);
-
-function nearestState(shown) {
-  return SHEET_STATES.reduce((a, b) =>
-    Math.abs(sheet.heights[b] - shown) < Math.abs(sheet.heights[a] - shown) ? b : a);
-}
-
-// The handle is a button: a tap or Enter cycles the heights, arrows step them.
-handle.addEventListener('click', () => {
-  if (sheetJustDragged) return;
-  setSheet(SHEET_STATES[(SHEET_STATES.indexOf(sheet.state) + 1) % 3], true);
-});
-handle.addEventListener('keydown', ev => {
-  const i = SHEET_STATES.indexOf(sheet.state);
-  if (ev.key === 'ArrowUp') { ev.preventDefault(); setSheet(SHEET_STATES[Math.min(2, i + 1)], true); }
-  if (ev.key === 'ArrowDown') { ev.preventDefault(); setSheet(SHEET_STATES[Math.max(0, i - 1)], true); }
-});
-
-const legendBtn = document.getElementById('legendbtn');
-function showLegend(on) {
-  document.getElementById('legendcard').classList.toggle('hidden', !on);
-  legendBtn.setAttribute('aria-expanded', on);
-}
-legendBtn.addEventListener('click', () => showLegend(legendBtn.getAttribute('aria-expanded') !== 'true'));
-
-// For a host app's Back gesture: fold whatever is open, and say whether
-// anything was. The host calls this; nothing here calls the host.
-window.carta = {
-  collapse() {
-    if (legendBtn.getAttribute('aria-expanded') === 'true') { showLegend(false); return true; }
-    if (sheetMode && sheet.state !== 'peek') { setSheet('peek', true); return true; }
-    return false;
-  },
+const release = ev => {
+  if (pan && !pan.moved) { const h = hit(...local(ev)); if (h) select(h.e); }
+  pts.delete(ev.pointerId);
+  if (pts.size < 2) pinch = null;
+  if (!pts.size) { pan = null; svg.classList.remove('grabbing'); }
 };
+svg.addEventListener('pointerup', release);
+svg.addEventListener('pointercancel', release);
+svg.addEventListener('pointerleave', () => { if (state.hovered) { state.hovered = null; draw(); } });
+svg.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  const [px, py] = local(ev), k = Math.min(5, Math.max(0.3, view.k * Math.pow(1.0015, -ev.deltaY)));
+  view.x = px - (px - view.x) * k / view.k; view.y = py - (py - view.y) * k / view.k; view.k = k;
+  userMoved = true; draw();
+}, { passive: false });
+$('fit').onclick = () => { userMoved = false; fit(); draw(); };
 
-narrow.addEventListener('change', arrange);
-// The peek is as tall as the grip, which grows when the survey's vantage and
-// coverage text arrive; the other heights follow the page.
-const sheetSizer = new ResizeObserver(() => {
-  if (!sheetMode) return;
-  measureSheet();
-  setSheet(sheet.state, false);
-});
-sheetSizer.observe(document.querySelector('main'));
-sheetSizer.observe(grip);
-arrange();
+// keepVisible moves the map just enough that the selected device sits above
+// the sheet, keeping as much of the rest in view as it can.
+function keepVisible() {
+  const n = state.selected && nodes.find(x => x.e === state.selected);
+  if (!n) return;
+  const [, y] = at(n), vis = visibleHeight();
+  if (y > vis - 40) view.y -= y - (vis - 70);
+  else if (y < 30) view.y += 60 - y;
+}
 
-/* ---------- panels ---------- */
+/* ---------- panel ---------- */
 
-function renderVantage() {
-  const v = survey.vantage || {};
-  // Three facts, kept apart by spacing rather than a separator glyph, so they
-  // can also wrap one per line on a narrow screen.
-  const el = document.getElementById('vantage');
-  el.textContent = '';
-  for (const part of [
-    v.prefix || '?',
-    `from ${v.ip || '?'} on ${v.interface || '?'}`,
-    new Date(survey.started_at).toLocaleString(),
-  ]) {
-    const span = document.createElement('span');
-    span.className = 'vpart';
-    span.textContent = part;
-    el.append(span);
+function select(e, focusPanel) {
+  state.selected = e; state.note = ''; state.tab = 'device';
+  if (document.body.classList.contains('sheet') && state.sheet === 'peek') setSheet('half');
+  if (document.body.classList.contains('sheet')) keepVisible();
+  render();
+  if (focusPanel) $('body').focus();
+}
+
+const confWord = c => `<span class="conf ${esc(c)}">${esc(c)}</span>`;
+
+function renderDevice() {
+  const e = state.selected;
+  let h = state.note ? `<p class="selnote">${esc(state.note)}</p>` : '';
+  if (!e) return h + '<p class="note">Tap a device on the map, or open the Devices tab.</p>';
+  const addr = [...ids(e, 'ip'), ...ids(e, 'mac')].join('   ');
+  h += `<div class="dev"><div class="caps kicker">Selected</div><h2>${esc(labelOf(e))}</h2><div class="addr">${esc(addr)}</div><div class="claims">`;
+  for (const [label, key, always] of [['Name', 'hostname', 1], ['Label', 'label', 0], ['Class', 'class', 1], ['Vendor', 'vendor', 0], ['Model', 'model', 0], ['OS', 'os', 0]]) {
+    const c = bestClaim(e, key);
+    if (!c && !always) continue;
+    h += c
+      ? `<div class="claim"><div class="k">${label}</div><div class="v"><span>${esc(c.value)}</span>${confWord(c.confidence)}</div>` +
+        `<div class="e">${esc(c.source?.method)}: ${esc(c.source?.evidence)}</div></div>`
+      : `<div class="claim"><div class="k">${label}</div><div class="v none">not learned</div></div>`;
   }
+  h += '</div>';
+  const seen = new Set(), svcs = [];
+  for (const c of [...(e.claims || [])].sort((a, b) => rank(b.confidence) - rank(a.confidence))) {
+    if (c.key === 'service' && !seen.has(c.value)) { seen.add(c.value); svcs.push(c); }
+  }
+  if (svcs.length) h += `<div class="sub"><div class="caps">Services</div>${svcs.map(c => `<div class="svc"><span>${esc(c.value)}</span>${confWord(c.confidence)}</div>`).join('')}</div>`;
+  const notes = (e.claims || []).filter(c => c.key === 'note');
+  if (notes.length) h += `<div class="sub"><div class="caps">Notes</div>${notes.map(c => `<p class="ev">${esc(c.value)}</p>`).join('')}</div>`;
+  if ((e.conflicts || []).length) h += `<div class="sub"><div class="caps">Disagreements</div>${e.conflicts.map(c => `<p class="ev">${esc(c)}</p>`).join('')}</div>`;
+  if ((e.merges || []).length) h += `<div class="sub"><div class="caps">Merged from</div>${e.merges.map(m => `<p class="ev">${esc(m)}</p>`).join('')}</div>`;
+  return h + '</div>';
 }
 
-function renderCoverage() {
-  const el = document.getElementById('coverage');
-  const c = (survey.coverage || [])[0];
-  if (!c) { el.textContent = ''; return; }
-  const total = c.addrs_total || 1;
-  const swept = Math.min(c.addrs_swept ?? total, total);
-  const responded = Math.min(c.responded || 0, swept);
-  // Widths are set through the DOM, not a style attribute, so the page can run
-  // under a Content-Security-Policy that forbids inline styles.
-  el.innerHTML = `
-    <div class="covbar"><i class="responded"></i><i class="silent"></i><i class="unswept"></i></div>
-    <span class="covtext"></span>`;
-  const bar = el.querySelectorAll('.covbar i');
-  bar[0].style.width = (responded / total * 100) + '%';
-  bar[1].style.width = ((swept - responded) / total * 100) + '%';
-  bar[2].style.width = ((total - swept) / total * 100) + '%';
-  // A survey cut short has addresses it never reached, and those are a third
-  // state: not answered and not asked.
-  el.querySelector('.covtext').textContent =
-    `${responded} of ${total} addresses in ${c.prefix} answered. ` +
-    `The hatched ${swept - responded} did not — unknown, not empty.` +
-    (swept < total ? ` The open ${total - swept} were never reached: the survey was cut short.` : '');
-}
+function entityByIdentity(idn) { return devices().find(e => (e.identities || []).includes(idn)); }
+function entityByLabel(label) { return devices().find(e => labelOf(e) === label); }
 
 function renderFindings() {
-  const el = document.getElementById('findings');
   const fs = survey.findings || [];
-  if (!fs.length) { el.innerHTML = '<p class="hint">Nothing worth reporting.</p>'; return; }
-  el.innerHTML = fs.map(f => `
-    <div class="finding ${esc(f.severity)}">
-      <h3>${esc(f.title)}</h3>
-      <span class="conf ${esc(f.confidence)}">${esc(f.confidence)}</span>
-      <p>${esc(f.detail)}</p>
-    </div>`).join('');
+  if (!fs.length) return '<p class="note">Nothing worth reporting.</p>';
+  return fs.map((f, i) => `<button class="row finding" data-finding="${i}"><span class="bar ${esc(f.severity)}"></span>` +
+    `<span><span class="title"><span class="rt">${esc(f.title)}</span>${confWord(f.confidence)}</span><p>${esc(f.detail)}</p></span></button>`).join('');
 }
 
-function renderList() {
-  const el = document.getElementById('list');
-  el.innerHTML = '<input class="searchbox" id="q" aria-label="Filter devices" placeholder="filter by name, address, vendor or class" />'
-    + '<div id="rows"></div>';
-  const rows = document.getElementById('rows');
-  const paint = (filter) => {
-    const f = (filter || '').toLowerCase();
-    rows.innerHTML = nodes
-      .filter(n => !f || rowText(n.e).toLowerCase().includes(f))
-      .map(n => `<div class="row" role="button" tabindex="0" data-id="${esc(n.id)}">
-          <span class="label">${esc(n.label)}</span>
-          <span class="meta">${esc(ids(n.e, 'ip').join(' '))}<br>${esc(best(n.e, 'class') || best(n.e, 'vendor') || 'unidentified')}</span>
-        </div>`).join('');
-    rows.querySelectorAll('.row').forEach(r => {
-      const open = () => {
-        const n = nodes.find(x => x.id === r.dataset.id);
-        if (n) select(n, true);
-      };
-      r.onclick = open;
-      r.onkeydown = ev => {
-        if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); }
-      };
-    });
+function renderDevices() {
+  const q = state.filter.toLowerCase();
+  const rows = devices().filter(e => !q || [labelOf(e), ids(e, 'ip').join(' '), best(e, 'vendor'), sublabelOf(e)].join(' ').toLowerCase().includes(q));
+  return `<input class="filter" id="filter" aria-label="Filter devices" placeholder="Filter by name, address or kind" value="${esc(state.filter)}">` +
+    rows.map(e => {
+      const ip = ids(e, 'ip').join(' ');
+      return `<button class="row device ${e === state.selected ? 'sel' : ''}" data-id="${esc(e.id)}">` +
+        `<span class="rt ${kindOf(e) === 'unknown' ? 'unk' : ''}">${esc(labelOf(e))}</span>` +
+        `<span class="what">${ip !== labelOf(e) ? esc(ip) + '<br>' : ''}${esc(sublabelOf(e))}</span></button>`;
+    }).join('') + (rows.length ? '' : '<p class="note">No device matches.</p>');
+}
+
+function renderDrift() {
+  if (!drift) return '';
+  let h = `<p class="since">Since the survey of ${esc(idDate(drift.before_id))}</p>`;
+  h += (drift.caveats || []).map(c => `<p class="caveat">${esc(c)}</p>`).join('');
+  if (!(drift.changes || []).length) h += '<p class="note">Nothing changed between the two surveys.</p>';
+  h += (drift.changes || []).map((c, i) => {
+    const text = !c.was ? c.now : !c.now ? 'was ' + c.was : `was ${c.was}, now ${c.now}`;
+    const how = c.matched_by ? (c.matched_by === 'ip' ? 'matched by address only, ' : `matched by ${c.matched_by}, `) + c.match : '';
+    return `<button class="row drift" data-change="${i}"><span class="kind">${esc(c.kind)}</span><span class="rt">${esc(c.entity)}</span>` +
+      (text ? `<span class="ev">${esc(text)}</span>` : '') + (c.details || []).map(d => `<span class="ev">${esc(d)}</span>`).join('') +
+      (how ? `<span class="ev">${esc(how)}</span>` : '') + '</button>';
+  }).join('');
+  return h;
+}
+
+function render() {
+  if (!survey) return;
+  for (const b of document.querySelectorAll('#tabs button')) {
+    const on = b.dataset.tab === state.tab;
+    b.setAttribute('aria-selected', on);
+    b.tabIndex = on ? 0 : -1;
+  }
+  $('body').setAttribute('aria-labelledby', 'tab-' + state.tab);
+  $('body').innerHTML = { device: renderDevice, findings: renderFindings, devices: renderDevices, drift: renderDrift }[state.tab]();
+  for (const r of $('body').querySelectorAll('[data-finding]')) {
+    const f = survey.findings[+r.dataset.finding], e = f.entities?.length && entityByIdentity(f.entities[0]);
+    if (e) r.onclick = () => select(e, true); else r.disabled = true;
+  }
+  for (const r of $('body').querySelectorAll('[data-id]')) r.onclick = () => select(devices().find(e => e.id === r.dataset.id), true);
+  for (const r of $('body').querySelectorAll('[data-change]')) {
+    const e = entityByLabel(drift.changes[+r.dataset.change].entity);
+    if (e) r.onclick = () => select(e, true); else r.disabled = true;
+  }
+  // The panel's content sets the peek height (sheetHeights), so a new device
+  // or tab re-measures it.
+  if (document.body.classList.contains('sheet')) $('panel').style.height = sheetHeights()[state.sheet] + 'px';
+  const f = $('filter');
+  if (f) f.oninput = () => {
+    state.filter = f.value; render();
+    const g = $('filter'); g.focus(); g.setSelectionRange(g.value.length, g.value.length);
   };
-  paint('');
-  document.getElementById('q').addEventListener('input', e => paint(e.target.value));
+  draw();
 }
 
-function rowText(e) {
-  return [labelOf(e), ids(e, 'ip').join(' '), ids(e, 'mac').join(' '), best(e, 'vendor'), best(e, 'class')].join(' ');
+function showTab(name) {
+  if (name === 'drift' && !drift) return;
+  state.tab = name;
+  if (document.body.classList.contains('sheet') && state.sheet === 'peek') setSheet('half');
+  render();
 }
+window.showTab = showTab;
 
-function renderDevice(e) {
-  const el = document.getElementById('device');
-  const host = bestWithConf(e, 'hostname');
-  const vendor = bestWithConf(e, 'vendor');
-  const cls = bestWithConf(e, 'class');
-  const model = bestWithConf(e, 'model');
-  const os = bestWithConf(e, 'os');
-
-  const idRow = (k, v) => v.length ? `<tr><td class="k">${k}</td><td class="mono">${esc(v.join(', '))}</td></tr>` : '';
-  const claimRow = (k, c) => c.value
-    ? `<tr><td class="k">${k}</td><td>${esc(c.value)} <span class="conf ${esc(c.conf)}">${esc(c.conf)}</span></td></tr>`
-    : `<tr><td class="k">${k}</td><td class="hint">not learned</td></tr>`;
-
-  const services = (e.claims || []).filter(c => c.key === 'service');
-  const ports = (e.claims || []).filter(c => c.key === 'port');
-  const notes = (e.claims || []).filter(c => c.key === 'note');
-
-  el.innerHTML = `
-    <h2 class="devname">${esc(labelOf(e))}</h2>
-    <div class="devsub">${esc(ids(e, 'ip').join(', '))}</div>
-
-    <table>
-      ${claimRow('Name', host)}
-      ${claimRow('Vendor', vendor)}
-      ${claimRow('Class', cls)}
-      ${claimRow('Model', model)}
-      ${claimRow('OS', os)}
-      ${idRow('MAC', ids(e, 'mac'))}
-    </table>
-
-    ${services.length ? `<h3>Services</h3><table>${services.map(c =>
-      `<tr><td>${esc(c.value)}</td><td><span class="conf ${esc(c.confidence)}">${esc(c.confidence)}</span></td></tr>`).join('')}</table>` : ''}
-
-    ${ports.length ? `<p class="evidence">Open TCP: ${ports.map(c => esc(c.value)).join(', ')}</p>` : ''}
-
-    ${notes.length ? `<h3>Notes</h3>${notes.map(c => `<p class="evidence">${esc(c.value)}</p>`).join('')}` : ''}
-
-    <h3>Evidence</h3>
-    <table>
-      <tr><th>Claim</th><th>Source</th></tr>
-      ${(e.claims || []).map(c => `<tr>
-        <td>${esc(c.key)} = ${esc(c.value)}</td>
-        <td><span class="conf ${esc(c.confidence)}">${esc(c.confidence)}</span>
-            <div class="evidence">${esc(c.source.method)} — ${esc(c.source.evidence || '')}</div></td>
-      </tr>`).join('')}
-    </table>
-
-    ${(e.conflicts || []).length ? `<h3>Disagreements</h3>${e.conflicts.map(c =>
-      `<p class="evidence">${esc(c)}</p>`).join('')}` : ''}
-
-    ${(e.merges || []).length ? `<h3>Merged from</h3>${e.merges.map(m =>
-      `<p class="evidence">${esc(m)}</p>`).join('')}` : ''}
-  `;
-}
-
-document.querySelectorAll('.tabs button').forEach(b => {
-  b.onclick = () => {
-    showTab(b.dataset.tab);
-    // Choosing a tab on a sheet that only peeks means wanting to read it.
-    if (sheetMode && sheet.state === 'peek') setSheet('half', true);
-  };
-});
-
-// The tabs are one stop in the keyboard order (the selected one); arrows move
-// between them, as a tablist does everywhere else.
-document.querySelector('.tabs').addEventListener('keydown', ev => {
-  const tabs = [...document.querySelectorAll('.tabs button:not(.hidden)')];
-  const i = tabs.indexOf(document.activeElement);
-  if (i < 0) return;
+for (const b of document.querySelectorAll('#tabs button')) b.onclick = () => showTab(b.dataset.tab);
+// The tabs are one stop in the keyboard order; arrows move between them.
+$('tabs').addEventListener('keydown', ev => {
+  const tabs = [...document.querySelectorAll('#tabs button:not(.hidden)')], i = tabs.indexOf(document.activeElement);
   const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[ev.key];
-  if (next === undefined) return;
+  if (i < 0 || next === undefined) return;
   ev.preventDefault();
   const t = tabs[(next + tabs.length) % tabs.length];
   showTab(t.dataset.tab);
   t.focus();
 });
-
-document.getElementById('skip').addEventListener('click', ev => {
+$('skip').addEventListener('click', ev => {
   ev.preventDefault();
-  if (sheetMode) setSheet('full', true);
-  showTab('list');
-  document.getElementById('q')?.focus();
+  if (document.body.classList.contains('sheet')) setSheet('full');
+  showTab('devices');
+  $('filter')?.focus();
 });
 
-/* Drift arrives already computed: matching devices across time is the model's
-   job, not the page's. Each change shows how it was matched, because a match on
-   an address alone may be two different devices that swapped leases. */
-function renderDrift(d) {
-  const el = document.getElementById('drift');
-  const caveats = (d.caveats || []).map(c => `<p class="caveat">${esc(c)}</p>`).join('');
-  const groups = [
-    ['appeared', 'Appeared'], ['vanished', 'Vanished'], ['moved', 'Moved'], ['mutated', 'Changed'],
-  ];
-  const changes = d.changes || [];
-  const body = groups.map(([kind, title]) => {
-    const rows = changes.filter(c => c.kind === kind);
-    if (!rows.length) return '';
-    return `<h3>${title} (${rows.length})</h3>` + rows.map(c => `
-      <div class="change">
-        <span class="label">${esc(c.entity)}</span>
-        ${c.matched_by ? `<span class="conf ${esc(c.match)}">by ${esc(c.matched_by)}, ${esc(c.match)}</span>` : ''}
-        <div class="evidence">${esc(c.was ? `${c.was} → ${c.now || ''}` : (c.now || ''))}</div>
-        ${(c.details || []).map(x => `<div class="evidence">${esc(x)}</div>`).join('')}
-      </div>`).join('');
-  }).join('');
-  el.innerHTML = `
-    <p class="mono">${esc(d.before_id)} → ${esc(d.after_id)}</p>
-    ${d.comparable ? '' : '<p class="caveat strong">These surveys are not of the same network. Read the changes below as a difference between two networks.</p>'}
-    ${caveats}
-    <p>${esc(d.summary || '')}</p>
-    ${body}`;
-  document.querySelector('.tabs button[data-tab="drift"]').classList.remove('hidden');
+/* ---------- layout: wide, two columns, or sheet ---------- */
+
+function mode() {
+  if (innerWidth < 760) return 'sheet';
+  if (innerWidth < 1000 || innerHeight < 560) return 'twocol';
+  return 'wide';
 }
 
-function showTab(name) {
-  document.querySelectorAll('.tabs button').forEach(b => {
-    const on = b.dataset.tab === name;
-    b.classList.toggle('on', on);
-    b.setAttribute('aria-selected', on);
-    b.tabIndex = on ? 0 : -1;
-  });
-  document.querySelectorAll('.tabbody').forEach(d => d.classList.toggle('hidden', d.id !== name));
+// The peek shows the tabs and the selected device's name and address, and
+// ends just below them rather than cutting a line in half. The positions
+// inside the sheet do not depend on its height, so they can be measured at
+// any height.
+function sheetHeights() {
+  const h = $('main').clientHeight;
+  let peek = 138;
+  const addr = $('body').querySelector('.addr');
+  if (addr && state.tab === 'device') {
+    peek = Math.round(addr.getBoundingClientRect().bottom - $('panel').getBoundingClientRect().top + 16);
+    peek = Math.min(Math.max(peek, 120), 240);
+  }
+  return { peek, half: Math.round(h * 0.55), full: h - 56 };
 }
 
-/* Everything rendered here came off an untrusted network: a device's own
-   hostname, banner or page title is attacker-controlled text. It is escaped
-   once, here, and never inserted as HTML anywhere else. */
-function esc(s) {
-  return String(s ?? '').replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+function setSheet(s, animate = true) {
+  state.sheet = s;
+  const p = $('panel');
+  if (!animate) p.style.transition = 'none';
+  p.style.height = sheetHeights()[s] + 'px';
+  document.body.classList.toggle('peek', s === 'peek');
+  document.body.classList.toggle('open', s !== 'peek');
+  $('handle').setAttribute('aria-expanded', s !== 'peek');
+  $('handle').setAttribute('aria-label', `Details panel, ${s === 'peek' ? 'collapsed' : s === 'half' ? 'half open' : 'open'}`);
+  if (!animate) requestAnimationFrame(() => { p.style.transition = ''; });
+  // The summary just changed height, so the map did too.
+  requestAnimationFrame(() => { if (!userMoved) fit(); keepVisible(); draw(); });
 }
+
+function arrange() {
+  const m = mode();
+  for (const c of ['wide', 'twocol', 'sheet']) document.body.classList.toggle(c, c === m);
+  if (m === 'sheet') {
+    document.body.classList.remove('tight');
+    if ($('summary').offsetHeight > $('main').clientHeight * 0.4) document.body.classList.add('tight');
+    setSheet(state.sheet, false);
+  }
+  else { $('panel').style.height = ''; document.body.classList.remove('peek', 'open'); }
+  if (!userMoved) fit();
+  draw();
+}
+addEventListener('resize', arrange);
+// The labels are measured in Inter; once it has loaded, measure again.
+document.fonts?.ready.then(() => { if (survey) draw(); });
+
+// The grip drags the sheet; a tap on it steps peek, half, full.
+let gripDrag = null;
+$('grip').addEventListener('pointerdown', ev => {
+  gripDrag = { y: ev.clientY, h: $('panel').clientHeight, moved: false };
+  $('panel').style.transition = 'none';
+  // Capture keeps a drag alive when the finger leaves the grip; it throws for
+  // a pointer the browser no longer tracks, which must not cost the gesture.
+  try { $('grip').setPointerCapture(ev.pointerId); } catch (_) {}
+});
+$('grip').addEventListener('pointermove', ev => {
+  if (!gripDrag) return;
+  const hs = sheetHeights(), d = gripDrag.y - ev.clientY;
+  if (Math.abs(d) > 4) gripDrag.moved = true;
+  $('panel').style.height = Math.max(hs.peek, Math.min(hs.full, gripDrag.h + d)) + 'px';
+});
+$('grip').addEventListener('pointerup', () => {
+  if (!gripDrag) return;
+  $('panel').style.transition = '';
+  if (gripDrag.moved) {
+    const cur = $('panel').clientHeight, hs = sheetHeights();
+    setSheet(Object.keys(hs).sort((a, b) => Math.abs(hs[a] - cur) - Math.abs(hs[b] - cur))[0]);
+  } else {
+    setSheet({ peek: 'half', half: 'full', full: 'peek' }[state.sheet]);
+  }
+  gripDrag = null;
+});
+$('handle').addEventListener('keydown', ev => {
+  const order = ['peek', 'half', 'full'], i = order.indexOf(state.sheet);
+  if (ev.key === 'ArrowUp' && i < 2) { ev.preventDefault(); setSheet(order[i + 1]); }
+  if (ev.key === 'ArrowDown' && i > 0) { ev.preventDefault(); setSheet(order[i - 1]); }
+});
+
+// Back in the Android app: lower the sheet. Returns whether it did anything,
+// so the app leaves only when nothing was open. The page never calls the app.
+window.carta = {
+  collapse() {
+    if (document.body.classList.contains('sheet') && state.sheet !== 'peek') { setSheet('peek'); return true; }
+    return false;
+  },
+};

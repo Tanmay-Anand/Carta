@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/Tanmay-Anand/carta/internal/drift"
 	"github.com/Tanmay-Anand/carta/internal/model"
 )
 
@@ -32,7 +33,9 @@ import (
 var assets embed.FS
 
 // Serve starts the loopback server and blocks until the context is cancelled.
-func Serve(ctx context.Context, g *model.Graph, port int, open bool) error {
+// rep, when not nil, is a comparison with an earlier survey, shown in the
+// page's Drift tab.
+func Serve(ctx context.Context, g *model.Graph, rep *drift.Report, port int, open bool) error {
 	sub, err := fs.Sub(assets, "assets")
 	if err != nil {
 		return err
@@ -44,6 +47,16 @@ func Serve(ctx context.Context, g *model.Graph, port int, open bool) error {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("Cache-Control", "no-store")
 		_ = json.NewEncoder(w).Encode(g)
+	})
+	// The page asks for this and shows a Drift tab only when it answers.
+	mux.HandleFunc("/api/drift", func(w http.ResponseWriter, r *http.Request) {
+		if rep == nil {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Cache-Control", "no-store")
+		_ = json.NewEncoder(w).Encode(rep)
 	})
 
 	// Binding to loopback specifically, not to :port. A survey document lists

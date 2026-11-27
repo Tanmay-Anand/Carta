@@ -2,6 +2,7 @@ package io.github.tanmayanand.carta
 
 import android.annotation.SuppressLint
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
@@ -140,6 +141,11 @@ class MainActivity : AppCompatActivity() {
             },
         )
         surveyButton.isEnabled = s !is Status.Stopping
+        // The pill is the one strong control: Survey in the text colour, Stop
+        // in red, the colour that marks the one thing that needs attention.
+        val pill = if (s is Status.Running) ColorStateList.valueOf(getColor(R.color.risk)) else getColorStateList(R.color.pill_stroke)
+        surveyButton.strokeColor = pill
+        surveyButton.setTextColor(pill)
         compareButton.isEnabled = state.shown != null && !busy
 
         // A survey takes minutes and the phone must not sleep through it: the
@@ -208,7 +214,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun renderStatus(s: Status, shown: SurveyStore.Entry?) {
         tag.visibility = View.GONE
-        status.setTextColor(getColor(R.color.dim))
+        status.setTextColor(getColor(R.color.fg))
         status.text = when (s) {
             Status.Idle -> getString(R.string.status_idle)
             is Status.Running ->

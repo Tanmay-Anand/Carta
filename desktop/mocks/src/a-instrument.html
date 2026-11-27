@@ -1,0 +1,199 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carta A: Instrument</title>
+<style>
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600 700; }
+:root {
+  --bg: #0a0b0b; --tile: #0e1110; --line: #1f2624; --line2: #2b3431;
+  --fg: #d9dedc; --dim: #6f7a77; --faint: #3a4441;
+  --accent: #5fd3a6; --accentdim: #1e4a3b; --unknown: #d9a441; --risk: #ff6b5e; --warn: #e3a008;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--mono); font-size: 12px; }
+body { display: grid; grid-template-rows: 44px 1fr; padding: 0 18px 18px; gap: 0; }
+
+/* top strip: brand, tools, state */
+.top { display: flex; align-items: center; gap: 28px; border-bottom: 1px solid var(--line); }
+.brand { font-weight: 700; letter-spacing: .22em; font-size: 13px; }
+.tools { display: flex; gap: 4px; }
+.tools span { padding: 5px 10px; color: var(--dim); letter-spacing: .12em; font-size: 10.5px; border: 1px solid transparent; }
+.tools .on { color: var(--fg); border-color: var(--line2); }
+.tools .later { color: var(--faint); }
+.state { margin-left: auto; display: flex; gap: 18px; color: var(--dim); font-size: 10.5px; letter-spacing: .1em; }
+.dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-right: 6px; vertical-align: 1px; }
+
+/* the grid */
+.grid { display: grid; gap: 10px; padding-top: 12px; min-height: 0;
+  grid-template-columns: 1fr 1fr 1fr 400px; grid-template-rows: 1fr 168px; }
+.tile { background: var(--tile); border: 1px solid var(--line); padding: 12px 14px; position: relative; min-height: 0; overflow: hidden; }
+.label { color: var(--dim); font-size: 10px; letter-spacing: .16em; text-transform: uppercase; display: flex; justify-content: space-between; align-items: center; }
+.corner { width: 18px; height: 18px; border: 1px solid var(--line2); display: grid; place-items: center; color: var(--dim); font-size: 10px; }
+.map { grid-column: 1 / 4; grid-row: 1; padding: 0; }
+.map .label { position: absolute; left: 14px; right: 14px; top: 12px; z-index: 2; }
+.map svg { width: 100%; height: 100%; display: block; }
+.readout { position: absolute; left: 14px; bottom: 12px; color: var(--dim); font-size: 10px; line-height: 1.7; letter-spacing: .08em; }
+.readout b { color: var(--fg); font-weight: 400; }
+.legend { position: absolute; right: 14px; bottom: 12px; display: flex; gap: 16px; color: var(--dim); font-size: 10px; letter-spacing: .08em; }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+.right { grid-column: 4; grid-row: 1 / 3; display: grid; grid-template-rows: 1fr auto; gap: 10px; min-height: 0; }
+.name { font-size: 20px; font-weight: 600; margin-top: 14px; }
+.sub { color: var(--dim); margin-top: 4px; }
+.kv { display: grid; grid-template-columns: 64px 1fr auto; row-gap: 9px; column-gap: 10px; margin-top: 18px; align-items: baseline; }
+.kv .k { color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .1em; }
+.kv .ev { grid-column: 2 / 4; color: var(--faint); font-size: 10.5px; margin-top: -6px; }
+.conf { font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; padding: 1px 6px; border: 1px solid var(--line2); color: var(--dim); }
+.conf.asserted { color: var(--accent); border-color: var(--accentdim); }
+.conf.observed { color: var(--fg); border-color: var(--dim); }
+.conf.weak { color: var(--faint); border-style: dotted; }
+.conf.inferred { border-style: dashed; }
+.svc { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 12px; }
+.svc div { display: flex; justify-content: space-between; margin-top: 8px; }
+
+.cells { display: grid; grid-template-columns: repeat(32, 1fr); gap: 3px; margin-top: 12px; }
+.cells i { aspect-ratio: 1; border: 1px solid var(--line2); }
+.cells i.a { background: var(--accent); border-color: var(--accent); }
+.covnums { display: flex; justify-content: space-between; margin-top: 12px; color: var(--dim); font-size: 10.5px; }
+.covnums b { color: var(--fg); font-weight: 400; font-size: 16px; display: block; }
+
+.ident { grid-column: 1; grid-row: 2; }
+.ident h2 { font-size: 17px; letter-spacing: .06em; font-weight: 600; margin: 10px 0 12px; display: flex; gap: 12px; align-items: center; }
+.ident h2 small { font-size: 9.5px; color: var(--accent); letter-spacing: .12em; font-weight: 400; }
+.ident dl { display: grid; grid-template-columns: 84px 1fr; row-gap: 6px; font-size: 11px; }
+.ident dt { color: var(--dim); }
+
+.scan { grid-column: 2; grid-row: 2; display: flex; flex-direction: column; }
+.scanhead { display: flex; justify-content: space-between; margin-top: 10px; font-size: 13px; }
+.blocks { display: grid; grid-template-columns: repeat(24, 1fr); gap: 3px; margin-top: 10px; height: 28px; }
+.blocks i { background: var(--accent); }
+.blocks i.off { background: transparent; border: 1px solid var(--line2); }
+.buttons { display: flex; gap: 8px; margin-top: auto; }
+.btn { flex: 1; padding: 9px 0; text-align: center; letter-spacing: .14em; font-size: 10.5px; border: 1px solid var(--line2); color: var(--fg); }
+.btn.primary { background: var(--accent); color: #06120d; border-color: var(--accent); font-weight: 600; }
+
+.log { grid-column: 3; grid-row: 2; }
+.log .lines { margin-top: 10px; display: grid; gap: 7px; font-size: 11px; }
+.log .lines div { display: grid; grid-template-columns: 62px 1fr; gap: 8px; }
+.sev { font-size: 9.5px; letter-spacing: .12em; }
+.sev.risk { color: var(--risk); } .sev.warn { color: var(--warn); } .sev.info { color: var(--dim); }
+.sev.drift { color: var(--accent); }
+.log .lines span:last-child { color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">CARTA</div>
+  <nav class="tools"><span class="on">SURVEY</span><span class="later">+ TOOLS LATER</span></nav>
+  <div class="state"><span><i class="dot"></i>READY</span><span>LAST SURVEY 15:56</span><span>41 S</span></div>
+</header>
+
+<main class="grid">
+  <section class="tile map">
+    <div class="label"><span>Map&nbsp;&nbsp;192.168.10.0/24</span><span class="corner">&#8599;</span></div>
+    <svg id="map" viewBox="0 0 1000 640" preserveAspectRatio="xMidYMid meet"></svg>
+    <div class="readout">DEVICES <b>14</b><br>NAMED <b>8</b><br>UNIDENTIFIED <b>4</b></div>
+    <div class="legend">
+      <span><i style="background:var(--fg)"></i>identified</span>
+      <span><i style="border:1.5px solid var(--accent)"></i>partly known</span>
+      <span><i style="border:1.5px dashed var(--unknown)"></i>unidentified</span>
+      <span><i style="background:var(--accent)"></i>infrastructure</span>
+    </div>
+  </section>
+
+  <aside class="right">
+    <section class="tile" id="device">
+      <div class="label"><span>Device</span><span class="corner">&#8599;</span></div>
+    </section>
+    <section class="tile">
+      <div class="label"><span>Coverage</span><span>254 addresses</span></div>
+      <div class="cells" id="cells"></div>
+      <div class="covnums"><span><b>14</b>answered</span><span><b>240</b>silent: unknown, not empty</span><span><b>0</b>unreached</span></div>
+    </section>
+  </aside>
+
+  <section class="tile ident">
+    <div class="label"><span>Survey</span><span class="corner">&#8942;</span></div>
+    <h2>192.168.10.0/24 <small><i class="dot"></i>COMPLETE</small></h2>
+    <dl>
+      <dt>FROM</dt><dd>192.168.10.20 on Wi-Fi</dd>
+      <dt>STARTED</dt><dd>23 Nov 2026, 15:56</dd>
+      <dt>GATEWAY</dt><dd>192.168.10.1</dd>
+      <dt>INSTRUMENT</dt><dd>carta-desktop</dd>
+    </dl>
+  </section>
+
+  <section class="tile scan">
+    <div class="label"><span>Scan</span><span class="corner">&#8599;</span></div>
+    <div class="scanhead"><span>LAST RUN</span><span>100%</span></div>
+    <div class="blocks" id="blocks"></div>
+    <div class="buttons"><span class="btn">SURVEY QUIETLY</span><span class="btn primary">SURVEY</span></div>
+  </section>
+
+  <section class="tile log">
+    <div class="label"><span>Log</span><span>findings and drift</span></div>
+    <div class="lines">
+      <div><span class="sev risk">RISK</span><span>A camera streams without a name or an owner</span></div>
+      <div><span class="sev warn">WARN</span><span>2 devices hide their hardware address</span></div>
+      <div><span class="sev info">INFO</span><span>One resolver, and it is the gateway</span></div>
+      <div><span class="sev drift">MOVED</span><span>192.168.10.60, was .61 (by mac, observed)</span></div>
+      <div><span class="sev drift">NEW</span><span>192.168.10.42, personal device</span></div>
+    </div>
+  </section>
+</main>
+
+<script src="data.js"></script>
+<script>
+const C = window.CARTA, svg = document.getElementById('map'), NS = 'http://www.w3.org/2000/svg';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; svg.append(e); return e; };
+const W = 1000, H = 640, P = { l: 150, r: 150, t: 90, b: 110 };
+const pos = id => { const n = C.layout[id]; return [P.l + n.u * (W - P.l - P.r), P.t + n.v * (H - P.t - P.b)]; };
+
+// a faint measuring grid, drawn as lines rather than a CSS pattern
+for (let x = 0; x <= W; x += 40) el('line', { x1: x, y1: 0, x2: x, y2: H, stroke: '#141918', 'stroke-width': 1 });
+for (let y = 0; y <= H; y += 40) el('line', { x1: 0, y1: y, x2: W, y2: y, stroke: '#141918', 'stroke-width': 1 });
+
+for (const l of C.links) {
+  const [x1, y1] = pos(l.a), [x2, y2] = pos(l.b);
+  el('line', { x1, y1, x2, y2, stroke: css('--line2'), 'stroke-width': 1, 'stroke-dasharray': '3 4' });
+}
+for (const d of C.devices) {
+  const [x, y] = pos(d.id), r = d.kind === 'infra' ? 9 : 6;
+  if (d.kind === 'named') el('circle', { cx: x, cy: y, r, fill: css('--fg') });
+  if (d.kind === 'infra') el('circle', { cx: x, cy: y, r, fill: css('--accent') });
+  if (d.kind === 'partial') el('circle', { cx: x, cy: y, r, fill: 'none', stroke: css('--accent'), 'stroke-width': 1.5 });
+  if (d.kind === 'unknown') el('circle', { cx: x, cy: y, r, fill: 'none', stroke: css('--unknown'), 'stroke-width': 1.5, 'stroke-dasharray': '2.5 2.5' });
+  el('text', { x, y: y + r + 15, 'text-anchor': 'middle', fill: d.kind === 'unknown' ? css('--dim') : css('--fg'), 'font-size': 11, 'font-family': css('--mono') }, d.label);
+}
+// callout for the selected device: a box joined to it by a leader line
+const [gx, gy] = pos('gw');
+el('circle', { cx: gx, cy: gy, r: 16, fill: 'none', stroke: css('--fg'), 'stroke-width': 1 });
+el('polyline', { points: `${gx + 12},${gy - 12} ${gx + 60},${gy - 70} ${gx + 120},${gy - 70}`, fill: 'none', stroke: css('--fg'), 'stroke-width': 1 });
+el('rect', { x: gx + 120, y: gy - 84, width: 150, height: 26, fill: css('--bg'), stroke: css('--fg'), 'stroke-width': 1 });
+el('text', { x: gx + 130, y: gy - 67, fill: css('--fg'), 'font-size': 11, 'font-family': css('--mono'), 'letter-spacing': 1 }, 'SELECTED  ROUTER');
+
+// inspector
+const s = C.selected, dev = document.getElementById('device');
+dev.insertAdjacentHTML('beforeend', `
+  <div class="name">${s.label}</div>
+  <div class="sub">${s.ip}&nbsp;&nbsp;&nbsp;${s.mac}</div>
+  <div class="kv">${s.claims.map(c => `
+    <span class="k">${c.key}</span><span>${c.value}</span><span class="conf ${c.conf}">${c.conf}</span>
+    <span class="ev">${c.method}: ${c.evidence}</span>`).join('')}
+  </div>
+  <div class="svc"><div class="label"><span>Services</span></div>
+    ${s.services.map(v => `<div><span>${v.name} <span style="color:var(--dim)">${v.port}</span></span><span class="conf ${v.conf}">${v.conf}</span></div>`).join('')}
+  </div>`);
+
+// 254 cells, one per address
+document.getElementById('cells').innerHTML =
+  Array.from({ length: 254 }, (_, i) => `<i class="${C.coverage.isAnswered(i + 1) ? 'a' : ''}"></i>`).join('');
+document.getElementById('blocks').innerHTML = Array.from({ length: 24 }, () => '<i></i>').join('');
+</script>
+</body>
+</html>

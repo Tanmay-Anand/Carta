@@ -137,6 +137,21 @@ func match(b *model.Entity, candidates []*model.Entity, taken map[string]bool) (
 	return nil, ""
 }
 
+// Find looks for one device of an earlier survey in a newer one, by the same
+// rules Compare uses, and says how strongly the two are the same device.
+//
+// An app that keeps a device selected across a new survey calls this rather
+// than comparing addresses itself: an address alone is the weakest match, and
+// the caller has to be able to say so ("matched by address only") or say that
+// the device did not answer at all.
+func Find(e *model.Entity, in *model.Graph) (found *model.Entity, by string, conf model.Confidence) {
+	if e == nil || in == nil {
+		return nil, "", model.Unknown
+	}
+	m, by := match(e, in.Entities, nil)
+	return m, by, matchConfidence(by)
+}
+
 // matchConfidence is how much a match on each identity kind is worth.
 func matchConfidence(by string) model.Confidence {
 	switch by {
