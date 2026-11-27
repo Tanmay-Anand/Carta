@@ -6,12 +6,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// The version lives in one file and the release workflow checks the tag
-// against it. versionCode is derived so that it cannot be forgotten.
-val appVersion: String = Properties()
-    .apply { rootProject.file("version.properties").inputStream().use { load(it) } }
-    .getProperty("versionName")
-require(appVersion.matches(Regex("""\d+\.\d+\.\d+"""))) { "version.properties: versionName must be MAJOR.MINOR.PATCH, got $appVersion" }
+// The version lives in one file, internal/version/VERSION, which the Go
+// binaries embed and the release workflow checks the tag against. versionCode
+// is derived so that it cannot be forgotten.
+val appVersion: String = rootProject.file("../internal/version/VERSION").readText().trim()
+require(appVersion.matches(Regex("""\d+\.\d{1,2}\.\d{1,2}"""))) { "internal/version/VERSION must be MAJOR.MINOR.PATCH, got $appVersion" }
 val appVersionCode: Int = appVersion.split(".").map(String::toInt).let { (major, minor, patch) -> major * 10000 + minor * 100 + patch }
 
 // Release signing: keystore.properties on a developer machine, environment
@@ -88,7 +87,8 @@ val bindGo by tasks.registering(Exec::class) {
     description = "Builds libs/carta.aar from the Go core with gomobile bind."
     group = "build"
     inputs.files(
-        fileTree(repoRoot.resolve("internal")) { include("**/*.go") },
+        // VERSION is embedded by the Go core, so a version bump rebuilds the .aar.
+        fileTree(repoRoot.resolve("internal")) { include("**/*.go", "**/VERSION") },
         fileTree(repoRoot.resolve("mobile")) { include("**/*.go", "go.mod", "go.sum") },
         repoRoot.resolve("go.mod"), repoRoot.resolve("go.sum"),
     )

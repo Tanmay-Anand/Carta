@@ -108,9 +108,15 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 		mu        sync.Mutex
 		protocols []string
 	)
-	opt.stage("listen")
-	if reached("listen") {
-		listen(ctx, g, &wg, &mu, &protocols)
+	// A quiet survey does not listen this way at all: mDNS and SSDP discovery
+	// both begin with a question sent to the segment, and a question is a
+	// packet. Quiet means nothing leaves the host, so the stage is skipped
+	// rather than announced.
+	if !opt.Passive {
+		opt.stage("listen")
+		if reached("listen") {
+			listen(ctx, g, &wg, &mu, &protocols)
+		}
 	}
 
 	opt.stage("sweep")
@@ -205,7 +211,11 @@ func Run(ctx context.Context, opt Options) (*model.Graph, *orient.Profile, error
 }
 
 // listen starts mDNS and SSDP listening, to run alongside the sweep.
-func listen(ctx context.Context, g *model.Graph, wg *sync.WaitGroup, mu *sync.Mutex, protocols *[]string) {
+// listen asks the segment over mDNS and SSDP and folds the answers in. It is a
+// variable so a test can prove a quiet survey never calls it.
+var listen = listenMulticast
+
+func listenMulticast(ctx context.Context, g *model.Graph, wg *sync.WaitGroup, mu *sync.Mutex, protocols *[]string) {
 	wg.Add(2)
 	go func() {
 		defer wg.Done()

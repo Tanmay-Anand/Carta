@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Disabled reads as disabled: 38% of the text colour, Material's own rule. -->
+<!-- The Survey pill's outline and text: the text colour, 38% when disabled
+     (Stopping…). Stop swaps in risk from code. -->
 <selector xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:alpha="0.38" android:color="@color/fg" android:state_enabled="false" />
     <item android:color="@color/fg" />

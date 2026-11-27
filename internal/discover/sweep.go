@@ -23,7 +23,7 @@ type Options struct {
 	Concurrency int           // parallel address workers
 	Timeout     time.Duration // per-connection budget
 	Ports       []int         // TCP ports probed on every responsive address
-	Passive     bool          // emit nothing: cache and multicast reading only
+	Passive     bool          // send nothing: the host's own caches only
 
 	// NoARP says the vantage cannot read its own ARP cache (Android hides it
 	// from apps). The sweep then skips everything that exists only to fill or
@@ -103,7 +103,7 @@ func Sweep(ctx context.Context, g *model.Graph, prof *orient.Profile, opt Option
 	}
 
 	if opt.Passive {
-		cov.Notes = append(cov.Notes, "passive profile: no packets were emitted; findings come from the host's own caches and from multicast listening")
+		cov.Notes = append(cov.Notes, "quiet survey: nothing was sent; every device here comes from this host's own ARP cache, so a device it has not exchanged traffic with recently is not on this map")
 		cov.EndedAt = time.Now()
 		return cov
 	}

@@ -5,8 +5,10 @@ import (
 	"net"
 	"slices"
 	"strings"
+	"sync"
 	"testing"
 
+	"github.com/Tanmay-Anand/carta/internal/model"
 	"github.com/Tanmay-Anand/carta/internal/orient"
 )
 
@@ -55,5 +57,47 @@ func TestACancelledSurveyIsPartialAndSaysSo(t *testing.T) {
 		if !slices.Contains(titles, want) {
 			t.Errorf("missing finding %q in %v", want, titles)
 		}
+	}
+}
+
+// A quiet survey sends nothing at all. mDNS and SSDP discovery both start by
+// asking the segment, so they must not run; the coverage note must say what
+// the survey actually did rather than claim listening it never did.
+func TestAQuietSurveySendsNothing(t *testing.T) {
+	asked := false
+	defer func(orig func(context.Context, *model.Graph, *sync.WaitGroup, *sync.Mutex, *[]string)) { listen = orig }(listen)
+	listen = func(context.Context, *model.Graph, *sync.WaitGroup, *sync.Mutex, *[]string) { asked = true }
+
+	ip, prefix, _ := net.ParseCIDR("192.0.2.5/29")
+	prof := &orient.Profile{OS: "test", Interface: "test0", IP: ip, Prefix: prefix, Gateway: "192.0.2.1"}
+	var stages []string
+	g, _, err := Run(context.Background(), Options{
+		Profile: prof, Passive: true, NoARP: true, ExplicitResolverOnly: true,
+		Progress: func(stage string, done, total int) {
+			if total == 0 {
+				stages = append(stages, stage)
+			}
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if asked {
+		t.Error("a quiet survey sent mDNS and SSDP queries")
+	}
+	for _, s := range []string{"listen", "probe", "nbns", "rdns"} {
+		if slices.Contains(stages, s) {
+			t.Errorf("a quiet survey announced the %q stage: %v", s, stages)
+		}
+	}
+	cov := g.Coverage[0]
+	if cov.AddrsSwept != 0 {
+		t.Errorf("a quiet survey swept %d addresses", cov.AddrsSwept)
+	}
+	if len(cov.Protocols) != 0 {
+		t.Errorf("a quiet survey with no ARP cache lists protocols it used: %v", cov.Protocols)
+	}
+	if notes := strings.Join(cov.Notes, "\n"); !strings.Contains(notes, "nothing was sent") {
+		t.Errorf("the coverage does not say the survey was quiet:\n%s", notes)
 	}
 }

@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carta D: Calm instrument</title>
+<style>
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600 700; }
+:root {
+  --bg: #000; --fg: #f0f0ed; --dim: #8b8b87; --faint: #45454250; --faint2: #4a4a47; --hair: #1d1d1c;
+  --red: #ff3b2f; --amber: #d29b3c; --warn: #e3a008;
+  --sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); font-size: 14px; }
+body { display: grid; grid-template-rows: 56px 1fr; overflow: hidden; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.mono { font-family: var(--mono); }
+.caps { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+
+/* ---------- top bar ---------- */
+.top { display: flex; align-items: center; gap: 32px; padding: 0 28px; border-bottom: 1px solid var(--hair); }
+.mark { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; }
+.tool { color: var(--fg); }
+.later { color: var(--dim); }
+.top .right { margin-left: auto; display: flex; gap: 26px; }
+.link { color: var(--dim); }
+.link:hover { color: var(--fg); }
+
+/* ---------- three columns ---------- */
+main { display: grid; grid-template-columns: 340px 1fr 380px; min-height: 0; }
+.col { min-height: 0; }
+
+/* left: what this survey is, how much it covered, and the controls */
+.summary { border-right: 1px solid var(--hair); padding: 34px 28px 26px; display: flex; flex-direction: column; }
+h1 { font-weight: 300; font-size: 56px; line-height: 1; letter-spacing: -.015em; }
+h1 small { display: block; font-size: 22px; color: var(--dim); margin-top: 10px; letter-spacing: 0; }
+.meta { margin-top: 26px; display: grid; grid-template-columns: 74px 1fr; row-gap: 7px; font-family: var(--mono); font-size: 11.5px; }
+.meta dt { color: var(--dim); }
+.section { margin-top: 34px; }
+.matrix { margin-top: 12px; display: grid; grid-template-columns: repeat(24, 1fr); gap: 5px; }
+.matrix i { aspect-ratio: 1; border-radius: 50%; background: var(--faint2); }
+.matrix i.a { background: var(--fg); }
+.matrix i.u { background: none; box-shadow: inset 0 0 0 1px var(--dim); }
+.counts { margin-top: 14px; display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); }
+.counts b { display: block; color: var(--fg); font-weight: 300; font-size: 22px; }
+.note { margin-top: 10px; font-size: 12px; color: var(--dim); line-height: 1.45; }
+
+.controls { margin-top: auto; }
+.status { display: flex; align-items: center; gap: 10px; font-size: 13px; min-height: 20px; }
+.tag { font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; color: var(--warn); border: 1px solid var(--warn); padding: 1px 6px; }
+.progress { height: 2px; background: var(--hair); margin: 12px 0 18px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--fg); }
+.buttons { display: flex; align-items: center; gap: 22px; }
+.pill { border: 1px solid var(--fg); border-radius: 999px; padding: 11px 34px; }
+.pill:hover { background: var(--fg); color: var(--bg); }
+.pill.stop { border-color: var(--red); color: var(--red); }
+.pill.stop:hover { background: var(--red); color: var(--bg); }
+.quiet { color: var(--dim); }
+.quiet:hover { color: var(--fg); }
+.hidden { display: none !important; }
+
+/* centre: the map */
+.mapwrap { position: relative; min-height: 0; }
+#map { width: 100%; height: 100%; display: block; cursor: grab; }
+#map.grabbing { cursor: grabbing; }
+.maptop { position: absolute; left: 24px; top: 20px; right: 24px; display: flex; justify-content: space-between; pointer-events: none; }
+.maptop .hint { font-family: var(--mono); font-size: 10.5px; color: var(--dim); }
+.legend { position: absolute; left: 24px; bottom: 20px; display: flex; gap: 20px; font-size: 12px; color: var(--dim); }
+.legend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 7px; vertical-align: 0; }
+.fit { position: absolute; right: 24px; bottom: 18px; font-family: var(--mono); font-size: 11px; color: var(--dim); border: 1px solid var(--hair); padding: 5px 12px; }
+.fit:hover { color: var(--fg); border-color: var(--dim); }
+.running #map { opacity: .45; transition: opacity .3s; }
+
+/* right: one panel, four tabs */
+.panel { border-left: 1px solid var(--hair); display: grid; grid-template-rows: auto 1fr; min-height: 0; }
+.tabs { display: flex; gap: 24px; padding: 22px 28px 0; border-bottom: 1px solid var(--hair); }
+.tabs button { padding-bottom: 12px; color: var(--dim); border-bottom: 1px solid transparent; margin-bottom: -1px; }
+.tabs button.on { color: var(--fg); border-color: var(--fg); }
+.tabs sup { font-family: var(--mono); font-size: 10px; margin-left: 3px; color: var(--dim); }
+.tabs sup.risk { color: var(--red); }
+.body { overflow-y: auto; padding: 26px 28px 30px; }
+
+.kicker { color: var(--red); }
+.dev h2 { font-weight: 300; font-size: 26px; margin-top: 8px; word-break: break-word; }
+.dev .addr { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 6px; }
+.claims { margin-top: 26px; display: grid; gap: 16px; }
+.claim .k { font-size: 11.5px; color: var(--dim); }
+.claim .v { font-size: 15px; margin-top: 3px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.claim .v.none { color: var(--dim); font-style: italic; font-size: 14px; }
+.conf { font-family: var(--mono); font-size: 10.5px; color: var(--dim); white-space: nowrap; }
+.conf.asserted, .conf.observed { color: var(--fg); }
+.conf.weak { color: var(--dim); }
+.claim .e { font-family: var(--mono); font-size: 10.5px; color: var(--dim); margin-top: 3px; }
+.sub { margin-top: 30px; }
+.svc { display: flex; justify-content: space-between; margin-top: 10px; }
+.svc span span { color: var(--dim); font-family: var(--mono); font-size: 12px; margin-left: 6px; }
+
+.row { display: block; width: 100%; text-align: left; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+.row:hover .title, .row:hover .name { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+.finding { display: grid; grid-template-columns: 3px 1fr; gap: 14px; }
+.finding .bar { background: var(--faint2); }
+.finding .bar.risk { background: var(--red); } .finding .bar.warn { background: var(--warn); }
+.finding .title { display: flex; justify-content: space-between; gap: 12px; }
+.finding p { color: var(--dim); margin-top: 6px; font-size: 13px; line-height: 1.45; }
+.filter { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--hair); color: var(--fg); font: inherit; padding: 4px 0 10px; outline: none; }
+.filter:focus { border-color: var(--dim); }
+.filter::placeholder { color: var(--dim); }
+.device { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.device .what { font-family: var(--mono); font-size: 11px; color: var(--dim); text-align: right; }
+.device .name.unk { color: var(--dim); }
+.device.sel .name { color: var(--red); }
+.drift .kind { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--dim); }
+.drift .name { margin-top: 4px; }
+.drift .what { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 4px; }
+.since { font-size: 13px; color: var(--dim); margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="mark">CARTA</span>
+  <span class="tool">Survey</span>
+  <span class="later">More tools later</span>
+  <div class="right"><button class="link" data-soon="Opening a saved survey">Open</button><button class="link" data-soon="Comparing with an earlier survey">Compare</button></div>
+</header>
+
+<main id="main">
+  <section class="col summary">
+    <h1><span id="count">14</span> devices<small>on 192.168.10.0/24</small></h1>
+    <dl class="meta">
+      <dt>from</dt><dd>192.168.10.20 on Wi-Fi</dd>
+      <dt>started</dt><dd>23 Nov 2026, 15:56</dd>
+      <dt>took</dt><dd id="took">41 s</dd>
+      <dt>gateway</dt><dd>192.168.10.1</dd>
+    </dl>
+
+    <div class="section">
+      <div class="caps">Coverage</div>
+      <div class="matrix" id="matrix"></div>
+      <div class="counts">
+        <span><b id="nAns">14</b>answered</span>
+        <span><b id="nSil">240</b>silent</span>
+        <span><b id="nUnr">0</b>unreached</span>
+      </div>
+      <p class="note">One dot per address. Silent means it did not answer: unknown, not empty.</p>
+    </div>
+
+    <div class="controls">
+      <div class="status"><span id="status">Survey complete</span><span class="tag hidden" id="tag">STOPPED EARLY</span></div>
+      <div class="progress"><i id="bar"></i></div>
+      <div class="buttons">
+        <button class="pill" id="survey">Survey</button>
+        <button class="quiet" id="quietly">Survey quietly</button>
+        <button class="pill stop hidden" id="stop">Stop</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="col mapwrap">
+    <div class="maptop"><span class="caps">Map</span><span class="hint">click a device, drag to pan, scroll to zoom</span></div>
+    <svg id="map"></svg>
+    <div class="legend">
+      <span><i style="background:var(--fg)"></i>identified</span>
+      <span><i style="box-shadow:inset 0 0 0 1.5px var(--fg)"></i>partly known</span>
+      <span><i style="box-shadow:inset 0 0 0 1.5px var(--amber)"></i>unidentified</span>
+    </div>
+    <button class="fit" id="fit">Fit</button>
+  </section>
+
+  <aside class="col panel">
+    <nav class="tabs" id="tabs">
+      <button data-tab="device" class="on">Device</button>
+      <button data-tab="findings">Findings<sup class="risk">3</sup></button>
+      <button data-tab="devices">Devices<sup>14</sup></button>
+      <button data-tab="drift">Drift<sup>3</sup></button>
+    </nav>
+    <div class="body" id="body"></div>
+  </aside>
+</main>
+
+<script src="data.js"></script>
+<script>
+const C = window.CARTA;
+const $ = id => document.getElementById(id);
+const byId = Object.fromEntries(C.devices.map(d => [d.id, d]));
+const state = { selected: 'gw', tab: 'device', filter: '', swept: 254, heard: null, running: false, timer: null };
+// A quiet survey sends nothing, not even a multicast question: it knows only
+// the devices in this machine's own ARP cache, the ones it has recently
+// exchanged traffic with.
+const HEARD_QUIETLY = new Set([1, 5, 12, 20]);
+
+/* ---------- map ---------- */
+const svg = $('map'), NS = 'http://www.w3.org/2000/svg';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const node = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+// The map's units are the element's own pixels, so text stays 12px however
+// wide the window is; the layout is spread over whatever room there is.
+const WORLD = { w: 0, h: 0 };
+const at = id => { const n = C.layout[id]; return [70 + n.u * (WORLD.w - 260), 80 + n.v * (WORLD.h - 170)]; };
+let view = { x: 0, y: 0, w: 1, h: 1 };
+function measure() {
+  WORLD.w = svg.clientWidth; WORLD.h = svg.clientHeight;
+  view = { x: 0, y: 0, w: WORLD.w, h: WORLD.h }; setView();
+}
+const setView = () => svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+
+function drawMap() {
+  svg.textContent = '';
+  for (const l of C.links) {
+    const [x1, y1] = at(l.a), [x2, y2] = at(l.b);
+    node('line', { x1, y1, x2, y2, stroke: '#232322', 'stroke-width': 1 });
+  }
+  for (const d of C.devices) {
+    const [x, y] = at(d.id), sel = d.id === state.selected, r = d.kind === 'infra' ? 7 : 4.5;
+    const g = node('g', { style: 'cursor:pointer' });
+    node('circle', { cx: x, cy: y, r: 16, fill: 'transparent' }, g);  // a wider target than the dot
+    if (sel) node('circle', { cx: x, cy: y, r: r + 9, fill: 'none', stroke: css('--red'), 'stroke-width': 1 }, g);
+    const colour = sel ? css('--red') : css('--fg');
+    if (d.kind === 'unknown') node('circle', { cx: x, cy: y, r, fill: 'none', stroke: sel ? colour : css('--amber'), 'stroke-width': 1.3, 'stroke-dasharray': '2 2' }, g);
+    else if (d.kind === 'partial') node('circle', { cx: x, cy: y, r, fill: 'none', stroke: colour, 'stroke-width': 1.3 }, g);
+    else node('circle', { cx: x, cy: y, r, fill: colour }, g);
+    const t = node('text', { x: x + r + (sel ? 16 : 9), y: y + 4, fill: sel ? css('--fg') : (d.kind === 'unknown' ? css('--dim') : css('--dim')),
+      'font-size': 12, 'font-family': css('--sans') }, g);
+    t.textContent = d.label;
+    g.addEventListener('click', ev => { ev.stopPropagation(); select(d.id); });
+  }
+}
+
+// drag to pan, wheel to zoom about the pointer
+let drag = null;
+svg.addEventListener('pointerdown', ev => { drag = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false }; svg.classList.add('grabbing'); });
+window.addEventListener('pointermove', ev => {
+  if (!drag) return;
+  const k = view.w / svg.clientWidth;
+  view.x = drag.vx - (ev.clientX - drag.x) * k; view.y = drag.vy - (ev.clientY - drag.y) * k; setView();
+});
+window.addEventListener('pointerup', () => { drag = null; svg.classList.remove('grabbing'); });
+svg.addEventListener('wheel', ev => {
+  ev.preventDefault();
+  const r = svg.getBoundingClientRect(), f = Math.pow(1.0015, ev.deltaY);
+  const nw = Math.min(WORLD.w * 2, Math.max(WORLD.w / 4, view.w * f)), nh = nw * view.h / view.w;
+  const px = view.x + (ev.clientX - r.left) / r.width * view.w, py = view.y + (ev.clientY - r.top) / r.height * view.h;
+  view.x = px - (px - view.x) * nw / view.w; view.y = py - (py - view.y) * nh / view.h; view.w = nw; view.h = nh; setView();
+}, { passive: false });
+$('fit').onclick = () => { view = { x: 0, y: 0, w: WORLD.w, h: WORLD.h }; setView(); };
+
+/* ---------- panel ---------- */
+function select(id) { state.selected = id; state.tab = 'device'; render(); }
+
+function renderDevice() {
+  const d = byId[state.selected], claims = C.claims[d.id] || [], svc = C.services[d.id] || [];
+  return `<div class="dev">
+    <div class="caps kicker">Selected</div>
+    <h2>${d.label}</h2>
+    <div class="addr">${d.ip}${d.mac ? '&nbsp;&nbsp;&nbsp;' + d.mac : ''}</div>
+    <div class="claims">${claims.map(c => c.value ? `
+      <div class="claim"><div class="k">${c.key}</div>
+        <div class="v"><span>${c.value}</span><span class="conf ${c.conf}">${c.conf}</span></div>
+        <div class="e">${c.method}: ${c.evidence}</div></div>` : `
+      <div class="claim"><div class="k">${c.key}</div><div class="v none">not learned</div></div>`).join('')}
+    </div>
+    ${svc.length ? `<div class="sub"><div class="caps">Services</div>${svc.map(v =>
+      `<div class="svc"><span>${v.name}<span>${v.port}</span></span><span class="conf ${v.conf}">${v.conf}</span></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+
+function renderFindings() {
+  return C.findings.map(f => `<button class="row finding" data-select="${f.entity}">
+    <span class="bar ${f.severity}"></span>
+    <span><span class="title"><span>${f.title}</span><span class="conf ${f.conf}">${f.conf}</span></span><p>${f.detail}</p></span>
+  </button>`).join('');
+}
+
+function renderDevices() {
+  const q = state.filter.toLowerCase();
+  const rows = C.devices.filter(d => !q || `${d.label} ${d.ip} ${d.sub}`.toLowerCase().includes(q));
+  return `<input class="filter" id="filter" placeholder="Filter by name, address or kind" value="${state.filter}">` +
+    rows.map(d => `<button class="row device ${d.id === state.selected ? 'sel' : ''}" data-select="${d.id}">
+      <span class="name ${d.kind === 'unknown' ? 'unk' : ''}">${d.label}</span>
+      <span class="what">${d.label === d.ip ? '' : d.ip + '<br>'}${d.sub}</span></button>`).join('') +
+    (rows.length ? '' : '<p class="note">No device matches.</p>');
+}
+
+function renderDrift() {
+  return `<p class="since">Since the survey of ${C.drift.since}</p>` + C.drift.changes.map(c => `
+    <button class="row drift" data-select="${c.id}">
+      <div class="kind">${c.kind}</div><div class="name">${c.entity}</div>
+      <div class="what">${c.text}${c.by ? `<br>matched by ${c.by}, ${c.conf}` : ''}</div></button>`).join('');
+}
+
+function render() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  $('body').innerHTML = { device: renderDevice, findings: renderFindings, devices: renderDevices, drift: renderDrift }[state.tab]();
+  document.querySelectorAll('[data-select]').forEach(b => b.onclick = () => select(b.dataset.select));
+  const f = $('filter');
+  if (f) { f.oninput = () => { state.filter = f.value; render(); const g = $('filter'); g.focus(); g.setSelectionRange(g.value.length, g.value.length); }; }
+  drawMap();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => { state.tab = b.dataset.tab; render(); });
+
+/* ---------- coverage ---------- */
+function renderCoverage() {
+  let ans = 0, sil = 0;
+  $('matrix').innerHTML = Array.from({ length: 254 }, (_, i) => {
+    if (i >= state.swept) {
+      if (state.heard && state.heard.has(i + 1)) { ans++; return '<i class="a"></i>'; }
+      return '<i class="u"></i>';
+    }
+    if (C.coverage.isAnswered(i + 1)) { ans++; return '<i class="a"></i>'; }
+    sil++; return '<i></i>';
+  }).join('');
+  $('nAns').textContent = ans; $('nSil').textContent = sil; $('nUnr').textContent = 254 - state.swept - (state.swept ? 0 : ans);
+  $('count').textContent = ans;
+}
+
+/* ---------- survey (simulated: this mock touches no network) ---------- */
+const stages = [['Orienting', 700], ['Listening', 1400], ['Sweeping', 0], ['Probing services', 1000], ['Asking NetBIOS', 600], ['Reverse DNS', 600]];
+const quietStages = [['Orienting', 700], ["Reading this machine's caches", 1200]];
+function setRunning(on) {
+  state.running = on;
+  $('main').classList.toggle('running', on);
+  $('survey').classList.toggle('hidden', on); $('quietly').classList.toggle('hidden', on); $('stop').classList.toggle('hidden', !on);
+}
+function startSurvey(quiet) {
+  setRunning(true); $('tag').classList.add('hidden');
+  state.swept = 0; state.heard = null; renderCoverage();
+  let i = 0, stage = '';
+  const total = 254, plan = quiet ? quietStages : stages;
+  const next = () => {
+    if (i >= plan.length) {
+      if (quiet) { state.heard = HEARD_QUIETLY; renderCoverage(); }
+      return finish(null);
+    }
+    const [name, ms] = plan[i++]; stage = name;
+    if (name === 'Sweeping') {
+      const step = () => {
+        state.swept = Math.min(total, state.swept + 6); renderCoverage();
+        $('status').textContent = `Sweeping ${state.swept} of ${total}`;
+        $('bar').style.width = (20 + state.swept / total * 60) + '%';
+        state.timer = state.swept < total ? setTimeout(step, 50) : setTimeout(next, 200);
+      };
+      return step();
+    }
+    $('status').textContent = name + '…';
+    $('bar').style.width = ({ Orienting: 5, Listening: 15, 'Probing services': 85, 'Asking NetBIOS': 92, 'Reverse DNS': 97 }[name] || 60) + '%';
+    state.timer = setTimeout(next, ms);
+  };
+  state.stop = () => finish(stage);
+  next();
+}
+function finish(stoppedIn) {
+  clearTimeout(state.timer); setRunning(false); $('bar').style.width = '0';
+  if (stoppedIn) {
+    $('status').textContent = `Stopped during ${stoppedIn}`; $('tag').classList.remove('hidden');
+  } else {
+    if (state.swept === 0) { $('status').textContent = 'Quiet survey: nothing was sent'; }
+    else $('status').textContent = 'Survey complete';
+    $('took').textContent = '9 s (simulated)';
+  }
+  renderCoverage();
+}
+$('survey').onclick = () => startSurvey(false);
+$('quietly').onclick = () => startSurvey(true);
+$('stop').onclick = () => { $('status').textContent = 'Stopping…'; setTimeout(() => state.stop(), 300); };
+document.querySelectorAll('[data-soon]').forEach(b => b.onclick = () => { $('status').textContent = b.dataset.soon + ' comes in a later stage.'; });
+
+measure(); renderCoverage(); render();
+window.addEventListener('resize', () => { measure(); drawMap(); });
+</script>
+</body>
+</html>

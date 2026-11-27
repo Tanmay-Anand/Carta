@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Carta B: Quiet</title>
+<style>
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; }
+:root {
+  --bg: #000; --fg: #f2f2f0; --dim: #8a8a86; --faint: #3b3b39; --hair: #1c1c1b;
+  --red: #ff2d1f; --link: #3d1210; --amber: #c9973a;
+  --sans: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+* { box-sizing: border-box; margin: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--fg); font-family: var(--sans); }
+body { position: relative; overflow: hidden; }
+
+.top { position: absolute; top: 28px; left: 56px; right: 56px; display: flex; align-items: baseline; gap: 36px; font-size: 13px; }
+.mark { font-family: var(--mono); letter-spacing: .3em; font-size: 12px; }
+.top span { color: var(--dim); }
+.top .on { color: var(--fg); }
+.top .right { margin-left: auto; display: flex; gap: 28px; }
+
+/* left column: the sentence that says what this survey is */
+.story { position: absolute; left: 56px; top: 118px; width: 420px; }
+h1 { font-weight: 300; font-size: 64px; line-height: 1; letter-spacing: -.015em; }
+h1 em { display: block; font-style: normal; color: var(--dim); font-size: 30px; margin-top: 10px; letter-spacing: 0; }
+.lede { margin-top: 22px; color: var(--dim); font-size: 14px; line-height: 1.55; max-width: 360px; }
+.lede b { color: var(--fg); font-weight: 400; }
+.matrix { margin-top: 30px; display: grid; grid-template-columns: repeat(32, 7px); gap: 5px; }
+.matrix i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.matrix i.a { background: var(--fg); }
+.mlabel { margin-top: 12px; font-family: var(--mono); font-size: 10.5px; color: var(--dim); letter-spacing: .04em; }
+
+.sections { position: absolute; left: 56px; bottom: 44px; display: flex; gap: 30px; font-size: 14px; }
+.sections span { color: var(--dim); padding-bottom: 6px; }
+.sections .on { color: var(--fg); border-bottom: 1px solid var(--fg); }
+.sections sup { font-family: var(--mono); font-size: 10px; margin-left: 4px; color: var(--dim); }
+.sections .risk sup { color: var(--red); }
+
+/* the map is the page */
+svg { position: absolute; left: 480px; top: 70px; width: 580px; height: 720px; }
+
+/* selected device: plain text, no boxes */
+.detail { position: absolute; right: 56px; top: 118px; width: 300px; }
+.detail .kicker { font-family: var(--mono); font-size: 10.5px; color: var(--red); letter-spacing: .14em; }
+.detail h2 { font-weight: 300; font-size: 26px; margin-top: 10px; letter-spacing: -.005em; }
+.detail .addr { font-family: var(--mono); font-size: 11.5px; color: var(--dim); margin-top: 6px; }
+.claims { margin-top: 30px; display: grid; gap: 18px; }
+.claim .k { font-size: 11px; color: var(--dim); }
+.claim .v { font-size: 15px; margin-top: 3px; display: flex; justify-content: space-between; align-items: baseline; }
+.claim .c { font-family: var(--mono); font-size: 10px; color: var(--dim); }
+.claim .c.asserted { color: var(--fg); }
+.claim .c.weak { color: var(--faint); }
+.claim .e { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-top: 3px; }
+.more { margin-top: 26px; font-size: 13px; color: var(--dim); }
+
+.actions { position: absolute; left: 50%; bottom: 36px; transform: translateX(-30%); display: flex; align-items: center; gap: 26px; }
+.pill { border: 1px solid var(--fg); border-radius: 999px; padding: 12px 40px; font-size: 14px; }
+.ghost { color: var(--dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <span class="mark on">CARTA</span>
+  <span class="on">Survey</span>
+  <span>More tools later</span>
+  <div class="right"><span>Open</span><span>Compare</span></div>
+</header>
+
+<section class="story">
+  <h1>14 devices<em>on 192.168.10.0/24</em></h1>
+  <p class="lede">Surveyed from <b>carta-laptop</b> on Wi-Fi, 23 Nov at 15:56, in 41 seconds.
+    <b>240</b> addresses stayed silent: unknown, not empty.</p>
+  <div class="matrix" id="matrix"></div>
+  <div class="mlabel">254 addresses, one dot each. Bright ones answered.</div>
+</section>
+
+<nav class="sections">
+  <span class="on">Map</span>
+  <span class="risk">Findings<sup>3</sup></span>
+  <span>Devices<sup>14</sup></span>
+  <span>Drift<sup>3</sup></span>
+</nav>
+
+<svg id="map" viewBox="0 0 580 720"></svg>
+
+<aside class="detail" id="detail"></aside>
+
+<div class="actions"><span class="pill">Survey</span><span class="ghost">Survey quietly</span></div>
+
+<script src="data.js"></script>
+<script>
+const C = window.CARTA, svg = document.getElementById('map'), NS = 'http://www.w3.org/2000/svg';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const el = (tag, attrs, text) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (text) e.textContent = text; svg.append(e); return e; };
+const W = 580, H = 720, P = 70;
+// more room on the right, where the labels run
+const pos = id => { const n = C.layout[id]; return [50 + n.u * (W - 200), P + 40 + n.v * (H - 2 * P - 80)]; };
+
+for (const l of C.links) {
+  const [x1, y1] = pos(l.a), [x2, y2] = pos(l.b);
+  el('line', { x1, y1, x2, y2, stroke: css('--link'), 'stroke-width': 1 });
+}
+for (const d of C.devices) {
+  const [x, y] = pos(d.id);
+  if (d.id === 'gw') {
+    el('circle', { cx: x, cy: y, r: 30, fill: 'none', stroke: css('--link'), 'stroke-width': 1 });
+    el('circle', { cx: x, cy: y, r: 11, fill: css('--red') });
+  } else if (d.kind === 'unknown') {
+    el('circle', { cx: x, cy: y, r: 3.5, fill: 'none', stroke: css('--dim'), 'stroke-width': 1 });
+  } else if (d.kind === 'partial') {
+    el('circle', { cx: x, cy: y, r: 3.5, fill: css('--dim') });
+  } else {
+    el('circle', { cx: x, cy: y, r: 3.5, fill: css('--fg') });
+  }
+  el('text', { x: x + (d.id === 'gw' ? 20 : 10), y: y + 4, fill: d.kind === 'unknown' ? css('--faint') : css('--dim'), 'font-size': 11, 'font-family': css('--sans') }, d.label);
+}
+
+const s = C.selected;
+document.getElementById('detail').innerHTML = `
+  <div class="kicker">SELECTED</div>
+  <h2>${s.label}</h2>
+  <div class="addr">${s.ip}&nbsp;&nbsp;&nbsp;${s.mac}</div>
+  <div class="claims">${s.claims.map(c => `
+    <div class="claim"><div class="k">${c.key}</div>
+      <div class="v"><span>${c.value}</span><span class="c ${c.conf}">${c.conf}</span></div>
+      <div class="e">${c.method}: ${c.evidence}</div></div>`).join('')}
+  </div>
+  <div class="more">2 services, 5 pieces of evidence</div>`;
+
+document.getElementById('matrix').innerHTML =
+  Array.from({ length: 254 }, (_, i) => `<i class="${C.coverage.isAnswered(i + 1) ? 'a' : ''}"></i>`).join('');
+</script>
+</body>
+</html>

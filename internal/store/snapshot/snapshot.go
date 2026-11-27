@@ -29,6 +29,7 @@ import (
 // legitimate drift report, and it is worth more than it costs.
 func Marshal(g *model.Graph) ([]byte, error) {
 	g.Sort()
+	g.Format = model.Format
 	b, err := json.MarshalIndent(g, "", "  ")
 	if err != nil {
 		return nil, err
@@ -42,6 +43,13 @@ func Unmarshal(b []byte) (*model.Graph, error) {
 	var g model.Graph
 	if err := json.Unmarshal(b, &g); err != nil {
 		return nil, err
+	}
+	switch {
+	case g.Format == 0:
+		// Written before Carta 1 recorded a format: the same layout.
+		g.Format = 1
+	case g.Format > model.Format:
+		return nil, fmt.Errorf("survey format %d was written by a newer Carta; this one reads format %d and older", g.Format, model.Format)
 	}
 	g.Rebuild()
 	return &g, nil

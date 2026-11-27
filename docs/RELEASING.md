@@ -1,10 +1,11 @@
-# Carta for Android — Releasing and Updating
+# Carta — Releasing and Updating
 
-How a change gets from this repository onto the phone.
+How a change gets from this repository to the people who run Carta.
 
-Every change ships the same way: a new APK on GitHub Releases, which Obtainium on the phone picks
-up and installs with one tap. There is no over-the-air path. The UI lives inside the APK, just as
-`carta ui` embeds it in the binary, and the app fetches nothing from the internet at runtime.
+Every change ships the same way: one version tag, which publishes one GitHub Release carrying
+everything Carta ships. On the phone, Obtainium picks up the new APK and installs it with one tap.
+There is no over-the-air path. The UI lives inside each program, as `carta ui` embeds it in the
+binary, and nothing fetches anything from the internet at runtime.
 
 ---
 
@@ -66,36 +67,55 @@ Local and CI builds use the same key, so either APK installs over the other.
 
 ## 2. Each release
 
-1. Set the new version in **`android/version.properties`** (for example `versionName=0.2.0`).
-   `versionCode` is derived from it, so there is nothing else to bump.
-2. Rename the `## Unreleased` section of `RELEASE_NOTES.md` to `## v0.2.0`. It becomes the GitHub
-   release text.
+1. Set the new version in **`internal/version/VERSION`** (for example `1.1.0`). It is the one
+   place the version lives: the CLI, the desktop app and the Android app all read it, and the
+   Android `versionCode` and the desktop build number are derived from it
+   (`major*10000 + minor*100 + patch`), so there is nothing else to bump. Minor and patch stay
+   below 100.
+2. Name the release notes section `## v1.1.0` in `RELEASE_NOTES.md` (rename `## Unreleased` if
+   there is one). It becomes the GitHub release text, and the release fails without it.
 3. Commit, then tag and push:
 
    ```bash
-   git tag v0.2.0
+   git tag v1.1.0
    ```
 
    ```bash
-   git push origin main v0.2.0
+   git push origin main v1.1.0
    ```
 
-`.github/workflows/release-android.yml` then:
+`.github/workflows/release.yml` then:
 
-- checks that the tag matches `version.properties`
+- checks that the tag matches `internal/version/VERSION` and that the release notes have its
+  section
 - runs the Go tests for the core and the binding
-- builds the `.aar` from the Go sources and the APK around it, for arm64
-- verifies the signature
-- publishes `carta-v0.2.0.apk` as a GitHub Release
+- in parallel:
+  - builds the CLI for Linux, macOS and Windows on amd64 and arm64, static, without cgo
+  - tests and packages Carta Desktop on Windows and on Linux (`desktop/package.sh`)
+  - builds the `.aar` from the Go sources and the APK around it, for arm64, and verifies its
+    signature
+- writes `SHA256SUMS` over every file, and publishes them all as one GitHub Release:
 
-Obtainium picks the release up on its next check.
+  | File | What it is |
+  |---|---|
+  | `carta-v1.1.0.apk` | the Android app, signed |
+  | `carta-desktop-v1.1.0-windows-amd64.exe` | Carta Desktop, one portable program |
+  | `carta-desktop-v1.1.0-linux-amd64.tar.xz` | Carta Desktop, with a `.desktop` entry and icon |
+  | `carta-v1.1.0-<os>-<arch>` | the CLI (`.exe` on Windows), six of them |
+  | `SHA256SUMS` | the checksum of each file above |
+
+The release is created only once every build has succeeded, so it never goes out without its
+APK. Obtainium picks it up on its next check.
+
+**Versions follow the promises in the README** (*Version 1*): a change that breaks reading a
+format 1 survey, a CLI command or flag, or installing over the last APK, is Carta 2.
 
 **Never reuse or move a tag.** Obtainium compares the release tag with the installed version. A
 release whose tag doesn't match the APK's version makes it offer the same update forever.
 
-**Tags are shared with the CLI.** If the CLI starts publishing its own releases, attach its
-binaries to the same release rather than tagging separately. Obtainium only installs the `.apk`,
-but a release without one would look like the latest version to it.
+**One tag for everything.** The CLI, the desktop app and the Android app never tag separately.
+Obtainium only installs the `.apk`, but a release without one would look like the latest version
+to it; the workflow refuses to publish a release without exactly one.
 
 ---
 
@@ -123,6 +143,26 @@ install from Obtainium. Uninstalling deletes the stored surveys.
 ---
 
 ## 4. Building locally
+
+### Carta Desktop
+
+On Windows, double-click `carta.bat` at the root of the repository: it builds the app into
+`dist\carta-desktop.exe` and starts it. It needs Go and MSYS2's UCRT64 gcc
+(`C:\msys64\ucrt64\bin`). To make the release package instead, with its icon and version
+information, install the Fyne tool once and run the packaging script from Git Bash:
+
+```bash
+go install fyne.io/tools/cmd/fyne@v1.7.4
+```
+
+```bash
+bash desktop/package.sh
+```
+
+It writes `dist/Carta.exe` on Windows and `dist/Carta.tar.xz` on Linux, where it needs `gcc`,
+`libgl1-mesa-dev` and `xorg-dev`.
+
+### Android
 
 Install the toolchain once:
 

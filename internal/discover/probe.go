@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Tanmay-Anand/carta/internal/model"
+	"github.com/Tanmay-Anand/carta/internal/version"
 )
 
 // Service identification, and the honest limits of it.
@@ -235,7 +236,7 @@ func fingerprintHTTP(ctx context.Context, g *model.Graph, ids []model.Identity, 
 	if err != nil {
 		return
 	}
-	req.Header.Set("User-Agent", "carta/0.1 (network survey)")
+	req.Header.Set("User-Agent", "carta/"+version.Number+" (network survey)")
 	resp, err := client.Do(req)
 	if err != nil {
 		return

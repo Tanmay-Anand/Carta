@@ -1,7 +1,52 @@
 # Carta — Release Notes
 
-A network survey instrument that documents what it cannot see: a CLI for any laptop, and an
-Android app.
+A network survey instrument that documents what it cannot see: a CLI for any laptop, a desktop
+app, and an Android app.
+
+---
+
+## v1.0.0
+
+Carta 1. Every release now carries the Android app, Carta Desktop for Windows and Linux, the CLI
+for six platforms, and a `SHA256SUMS` file to check them against.
+
+**What version 1 promises.** Until 2.0:
+
+- Every 1.x Carta reads every format 1 `survey.json`, including surveys written by 0.1.0. A survey
+  written by a newer Carta is refused, never half read.
+- The CLI's commands and flags keep working as documented. New ones may be added.
+- Each Android release is signed with the same key, so it installs over the last one and keeps the
+  surveys on the phone.
+
+A change that breaks any of these waits for Carta 2.
+
+**New: Carta Desktop.** Carta in a window: one portable `.exe`, no browser, no server. Survey and
+Survey quietly run the same engine as `carta survey`, and each survey is saved, as the CLI saves
+one, in `carta-surveys` next to the program. It opens on the last survey; **Open** reads any saved
+`survey.json`; **Compare** picks an earlier survey of the network and shows what changed. A device
+stays selected across a new survey when it can be matched, and the panel says how strongly (by
+its MAC, its name, or only its address) or why it was not seen. `carta-desktop --demo` shows a
+fictional network and sends nothing.
+
+**New design, everywhere.** The desktop app, `carta ui` and the Android app share one design: a
+near-black (or near-white) instrument with a large count, a dot per address for coverage, the map,
+and one panel with Device, Findings, Devices and Drift tabs. Inter and JetBrains Mono are bundled.
+On a phone the panel is a sheet that slides over the map. `docs/DESIGN_SYSTEM_CARTA.md` describes
+it.
+
+**New: `carta ui --compare EARLIER.json`** shows what changed in a Drift tab, and
+`carta survey --open` shows the drift against the previous survey without being asked.
+
+**Changed: `survey.json` records its format** (`"format": 1`). Files written before it read as
+format 1; a newer format is refused rather than half read.
+
+**Changed: one version number.** `internal/version/VERSION` is read by the CLI, the desktop app,
+the Android build and the probes' User-Agent.
+
+**Fixed: `--passive` now sends nothing at all.** It was documented as emitting nothing, but it
+still asked the segment over mDNS and SSDP. A quiet survey now reads only this machine's own
+caches, so it finds fewer devices: only those this machine has exchanged traffic with recently.
+Its coverage note says exactly that.
 
 ---
 

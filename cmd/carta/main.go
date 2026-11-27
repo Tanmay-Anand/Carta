@@ -26,14 +26,13 @@ import (
 
 	"github.com/Tanmay-Anand/carta/internal/drift"
 	"github.com/Tanmay-Anand/carta/internal/model"
+	"github.com/Tanmay-Anand/carta/internal/pack"
 	"github.com/Tanmay-Anand/carta/internal/render"
 	"github.com/Tanmay-Anand/carta/internal/store/snapshot"
-	"github.com/Tanmay-Anand/carta/internal/store/sqlitedb"
 	"github.com/Tanmay-Anand/carta/internal/survey"
 	"github.com/Tanmay-Anand/carta/internal/ui"
+	"github.com/Tanmay-Anand/carta/internal/version"
 )
-
-const version = "0.1.0"
 
 func main() {
 	if len(os.Args) < 2 {
@@ -53,7 +52,7 @@ func main() {
 	case "ui":
 		err = cmdUI(ctx, os.Args[2:])
 	case "version", "--version", "-v":
-		fmt.Println("carta " + version)
+		fmt.Println("carta " + version.Number)
 	case "help", "--help", "-h":
 		usage()
 	default:
@@ -73,11 +72,12 @@ func usage() {
   carta survey [flags]        survey the network this machine is on
   carta diff A.json [B.json]  report what changed between two surveys
   carta ui [SNAPSHOT.json]    open the survey in a browser
+                              (--compare EARLIER.json shows what changed)
   carta version
 
 survey flags:
   --out DIR        where to write the document pack (default ./carta-surveys)
-  --passive        emit nothing: read caches and listen for announcements only
+  --passive        send nothing: read this machine's own caches only
   --timeout DUR    per-connection budget (default 700ms)
   --concurrency N  parallel workers (default 128)
   --oui FILE       an IEEE oui.csv to use instead of the built-in table
@@ -90,7 +90,7 @@ Survey only networks you are authorised to survey.
 func cmdSurvey(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("survey", flag.ExitOnError)
 	out := fs.String("out", "carta-surveys", "directory for the document pack")
-	passive := fs.Bool("passive", false, "emit nothing; caches and multicast listening only")
+	passive := fs.Bool("passive", false, "send nothing; this machine's own caches only")
 	timeout := fs.Duration("timeout", 700*time.Millisecond, "per-connection budget")
 	conc := fs.Int("concurrency", 128, "parallel workers")
 	oui := fs.String("oui", "", "path to an IEEE oui.csv")
@@ -100,7 +100,7 @@ func cmdSurvey(ctx context.Context, args []string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "carta %s\n", version)
+	fmt.Fprintf(os.Stderr, "carta %s\n", version.Number)
 	start := time.Now()
 
 	// A survey is bounded work, and a tool someone runs while standing at a
@@ -132,47 +132,24 @@ func cmdSurvey(ctx context.Context, args []string) error {
 		return err
 	}
 
-	dir := filepath.Join(*out, g.SurveyID)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	if err := snapshot.Write(filepath.Join(dir, "survey.json"), g); err != nil {
-		return err
-	}
-	if err := sqlitedb.Write(filepath.Join(dir, "survey.db"), g); err != nil {
-		return err
-	}
-	pack, err := render.Pack(dir, g, prof)
+	saved, err := pack.Save(*out, g, prof)
 	if err != nil {
 		return err
 	}
-
-	// A baseline is just the most recent survey, kept at a stable path so the
-	// next run has something to diff against without the operator having to
-	// remember a filename.
-	baseline := filepath.Join(*out, "baseline.json")
-	if prev, err := snapshot.Read(baseline); err == nil {
-		rep := drift.Compare(prev, g)
-		if err := os.WriteFile(filepath.Join(dir, "drift.md"), []byte(render.Drift(rep)), 0o644); err != nil {
-			return err
-		}
-		pack = append(pack, filepath.Join(dir, "drift.md"))
-		fmt.Fprintln(os.Stderr, "\n"+rep.Summary())
-	}
-	if err := snapshot.Write(baseline, g); err != nil {
-		return err
+	if saved.Drift != nil {
+		fmt.Fprintln(os.Stderr, "\n"+saved.Drift.Summary())
 	}
 
 	fmt.Fprintf(os.Stderr, "\nSurveyed %s from %s in %s.\n",
 		g.Vantage.Prefix, g.Vantage.IP, time.Since(start).Round(time.Millisecond))
 	printSummary(g)
-	fmt.Fprintf(os.Stderr, "\nWrote %d files to %s\n", len(pack), dir)
-	for _, p := range pack {
+	fmt.Fprintf(os.Stderr, "\nWrote %d files to %s\n", len(saved.Files), saved.Dir)
+	for _, p := range saved.Files {
 		fmt.Fprintf(os.Stderr, "  %s\n", filepath.Base(p))
 	}
 
 	if *open {
-		return ui.Serve(ctx, g, 0, true)
+		return ui.Serve(ctx, g, saved.Drift, 0, true)
 	}
 	return nil
 }
@@ -246,6 +223,7 @@ func cmdUI(ctx context.Context, args []string) error {
 	fs := flag.NewFlagSet("ui", flag.ExitOnError)
 	port := fs.Int("port", 7373, "loopback port; 0 picks a free one")
 	noOpen := fs.Bool("no-open", false, "do not open a browser")
+	compare := fs.String("compare", "", "an earlier survey to show what changed since")
 	if err := fs.Parse(flagsFirst(args)); err != nil {
 		return err
 	}
@@ -257,7 +235,16 @@ func cmdUI(ctx context.Context, args []string) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w (run `carta survey` first)", path, err)
 	}
-	return ui.Serve(ctx, g, *port, !*noOpen)
+	var rep *drift.Report
+	if *compare != "" {
+		earlier, err := snapshot.Read(*compare)
+		if err != nil {
+			return err
+		}
+		r := drift.Compare(earlier, g)
+		rep = &r
+	}
+	return ui.Serve(ctx, g, rep, *port, !*noOpen)
 }
 
 // flagsFirst reorders arguments so flags can follow the file name.
@@ -288,7 +275,7 @@ func flagsFirst(args []string) []string {
 // takesValue reports whether a flag consumes the next argument. Booleans do not.
 func takesValue(flag string) bool {
 	switch strings.TrimLeft(flag, "-") {
-	case "port", "out", "timeout", "concurrency", "oui", "deadline":
+	case "port", "out", "timeout", "concurrency", "oui", "deadline", "compare":
 		return true
 	}
 	return false

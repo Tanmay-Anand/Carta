@@ -1,0 +1,64 @@
+name: desktop
+
+# Carta Desktop (desktop/) is its own module: Fyne's dependency tree and its C
+# and OpenGL build stay out of the CLI's, so the CLI's matrix in ci.yml never
+# needs a C compiler. This job builds and tests the window app on the two
+# platforms it ships for, and packages it.
+on:
+  push:
+    branches: [main]
+    paths: ['desktop/**', 'internal/**', 'go.mod', 'go.sum', '.github/workflows/desktop.yml']
+  pull_request:
+    paths: ['desktop/**', 'internal/**', 'go.mod', 'go.sum', '.github/workflows/desktop.yml']
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    defaults:
+      run:
+        shell: bash
+    env:
+      CGO_ENABLED: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: desktop/go.mod
+          cache-dependency-path: desktop/go.sum
+
+      # Fyne draws with OpenGL through cgo: a C compiler everywhere, and the
+      # X11 and GL headers on Linux (Fyne's documented list).
+      - name: C compiler and graphics headers
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev
+      - name: C compiler
+        if: runner.os == 'Windows'
+        id: msys2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
+      - name: Put gcc on PATH
+        if: runner.os == 'Windows'
+        run: echo "${{ steps.msys2.outputs.msys2-location }}/ucrt64/bin" >> "$GITHUB_PATH"
+
+      # The tests run headless on Fyne's software driver: no display needed.
+      - name: Vet and test
+        working-directory: desktop
+        run: go vet ./... && go test ./...
+
+      - name: Package
+        run: |
+          go install fyne.io/tools/cmd/fyne@v1.7.4
+          bash desktop/package.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: carta-desktop-${{ runner.os }}
+          path: dist/Carta.*
+          if-no-files-found: error

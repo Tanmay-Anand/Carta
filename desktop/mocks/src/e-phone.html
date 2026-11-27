@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Carta E: Phone</title>
+<style>
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-Regular.woff2") format("woff2"); font-weight: 400; }
+@font-face { font-family: "JetBrains Mono"; src: url("../../../internal/ui/assets/fonts/JetBrainsMono-SemiBold.woff2") format("woff2"); font-weight: 600 700; }
+:root {
+  --bg: #000; --sheet: #0b0b0b; --fg: #f0f0ed; --dim: #8b8b87; --faint2: #4a4a47; --hair: #1d1d1c;
+  --red: #ff3b2f; --amber: #d29b3c; --warn: #e3a008;
+  --sans: "Segoe UI Variable Display", "Segoe UI", Roboto, system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+  --bar: 76px;
+}
+* { box-sizing: border-box; margin: 0; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; background: #111; color: var(--fg); font-family: var(--sans); font-size: 14px; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+.caps { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.hidden { display: none !important; }
+
+/* On a desktop the page shows a phone-sized screen; on a phone it fills it. */
+body { display: grid; place-items: center; }
+.phone { position: relative; width: 390px; height: 844px; background: var(--bg); border: 1px solid #262626; border-radius: 36px; overflow: hidden;
+  display: grid; grid-template-rows: 30px 50px auto 1fr; }
+@media (max-width: 480px) { body { display: block; } .phone { width: 100vw; height: 100dvh; border: 0; border-radius: 0; } }
+
+.sys { display: flex; justify-content: space-between; align-items: center; padding: 8px 26px 0; font-size: 12px; color: var(--fg); }
+.appbar { display: flex; align-items: center; justify-content: space-between; padding: 0 22px; }
+.mark { font-family: var(--mono); font-size: 12px; letter-spacing: .3em; }
+.link { color: var(--dim); font-size: 14px; }
+
+/* the summary: what this survey is, and how much of the network it covered */
+.hero { padding: 6px 22px 0; }
+h1 { font-weight: 300; font-size: 40px; line-height: 1; letter-spacing: -.015em; }
+h1 small { display: block; font-size: 17px; color: var(--dim); margin-top: 6px; letter-spacing: 0; }
+.facts { margin-top: 10px; font-family: var(--mono); font-size: 11px; color: var(--dim); line-height: 1.6; }
+.facts b { color: var(--fg); font-weight: 400; }
+.matrix { margin-top: 14px; display: grid; grid-template-columns: repeat(32, 1fr); gap: 3px; }
+.matrix i { aspect-ratio: 1; border-radius: 50%; background: var(--faint2); }
+.matrix i.a { background: var(--fg); }
+.matrix i.u { background: none; box-shadow: inset 0 0 0 1px var(--dim); }
+.counts { margin-top: 10px; display: flex; gap: 18px; font-size: 12px; color: var(--dim); }
+.counts b { color: var(--fg); font-weight: 400; margin-right: 4px; }
+
+.mapwrap { position: relative; min-height: 0; }
+/* With the sheet open the summary shrinks to one line, so the map keeps room
+   for the device being read about. */
+.compact h1 { font-size: 22px; }
+.compact h1 small { display: inline; font-size: 15px; margin: 0 0 0 6px; }
+.compact .facts, .compact .matrix, .compact .counts { display: none; }
+.compact .hero { padding-bottom: 12px; border-bottom: 1px solid var(--hair); }
+#map { width: 100%; height: 100%; display: block; touch-action: none; overflow: hidden; }
+.running #map { opacity: .45; }
+
+/* the sheet: four tabs, sliding over the map */
+.sheet { position: absolute; left: 0; right: 0; bottom: var(--bar); background: var(--sheet); border-top: 1px solid var(--hair);
+  border-radius: 18px 18px 0 0; display: grid; grid-template-rows: auto auto 1fr; transition: height .22s ease; z-index: 5; }
+.grip { padding: 8px 0 2px; display: grid; place-items: center; touch-action: none; cursor: grab; }
+.grip span { width: 36px; height: 4px; border-radius: 2px; background: #3a3a38; }
+.tabs { display: flex; gap: 20px; padding: 6px 22px 0; border-bottom: 1px solid var(--hair); }
+.tabs button { padding: 8px 0 11px; color: var(--dim); border-bottom: 1px solid transparent; margin-bottom: -1px; }
+.tabs button.on { color: var(--fg); border-color: var(--fg); }
+.tabs sup { font-family: var(--mono); font-size: 9.5px; margin-left: 2px; color: var(--dim); }
+.tabs sup.risk { color: var(--red); }
+.body { overflow-y: auto; padding: 16px 22px 24px; min-height: 0; }
+.peek .body { overflow: hidden; }
+
+.peekline { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.dev h2 { font-weight: 300; font-size: 22px; word-break: break-word; }
+.dev .addr { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 5px; }
+.claims { margin-top: 20px; display: grid; gap: 14px; }
+.claim .k { font-size: 11.5px; color: var(--dim); }
+.claim .v { font-size: 15px; margin-top: 2px; display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.claim .v.none { color: var(--dim); font-style: italic; font-size: 14px; }
+.conf { font-family: var(--mono); font-size: 10px; color: var(--dim); white-space: nowrap; }
+.conf.asserted, .conf.observed { color: var(--fg); }
+.conf.weak { color: var(--dim); }
+.claim .e { font-family: var(--mono); font-size: 10px; color: var(--dim); margin-top: 2px; }
+.sub { margin-top: 24px; }
+.svc { display: flex; justify-content: space-between; margin-top: 9px; }
+.svc span span { color: var(--dim); font-family: var(--mono); font-size: 11.5px; margin-left: 6px; }
+
+.row { display: block; width: 100%; text-align: left; padding: 13px 0; border-bottom: 1px solid var(--hair); }
+.finding { display: grid; grid-template-columns: 3px 1fr; gap: 12px; }
+.finding .bar { background: var(--faint2); }
+.finding .bar.risk { background: var(--red); } .finding .bar.warn { background: var(--warn); }
+.finding .title { display: flex; justify-content: space-between; gap: 10px; }
+.finding p { color: var(--dim); margin-top: 5px; font-size: 13px; line-height: 1.45; }
+.filter { width: 100%; background: none; border: 0; border-bottom: 1px solid var(--hair); color: var(--fg); font: inherit; padding: 4px 0 10px; outline: none; }
+.filter::placeholder { color: var(--dim); }
+.device { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.device .what { font-family: var(--mono); font-size: 10.5px; color: var(--dim); text-align: right; }
+.device .name.unk { color: var(--dim); }
+.device.sel .name { color: var(--red); }
+.drift .kind { font-family: var(--mono); font-size: 10px; letter-spacing: .12em; color: var(--dim); }
+.drift .name { margin-top: 4px; }
+.drift .what { font-family: var(--mono); font-size: 11px; color: var(--dim); margin-top: 4px; }
+.since { font-size: 13px; color: var(--dim); margin-bottom: 4px; }
+.note { color: var(--dim); font-size: 13px; margin-top: 12px; }
+
+/* the one action, always in reach of a thumb */
+.bottombar { position: absolute; left: 0; right: 0; bottom: 0; height: var(--bar); background: var(--bg); border-top: 1px solid var(--hair);
+  display: flex; align-items: center; gap: 14px; padding: 0 22px 6px; z-index: 6; }
+.progress { position: absolute; left: 0; right: 0; top: -1px; height: 2px; }
+.progress i { display: block; height: 100%; width: 0; background: var(--fg); }
+.status { flex: 1; min-width: 0; font-size: 13px; line-height: 1.3; }
+.status small { display: block; color: var(--dim); font-size: 11.5px; }
+.tag { font-family: var(--mono); font-size: 9px; letter-spacing: .12em; color: var(--warn); border: 1px solid var(--warn); padding: 1px 5px; margin-left: 6px; vertical-align: 1px; }
+.pill { border: 1px solid var(--fg); border-radius: 999px; padding: 12px 30px; font-size: 15px; }
+.pill:active { background: var(--fg); color: var(--bg); }
+.pill.stop { border-color: var(--red); color: var(--red); }
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+  <div class="sys"><span>9:41</span><span class="caps" style="letter-spacing:.08em">Wi-Fi</span></div>
+  <header class="appbar"><span class="mark">CARTA</span><button class="link" id="compare">Compare</button></header>
+
+  <section class="hero">
+    <h1><span id="count">14</span> devices<small>on 192.168.10.0/24</small></h1>
+    <p class="facts">from <b>192.168.10.20</b> on Wi-Fi, 15:56, took <b id="took">41 s</b></p>
+    <div class="matrix" id="matrix"></div>
+    <div class="counts"><span><b id="nAns">14</b>answered</span><span><b id="nSil">240</b>silent</span><span><b id="nUnr">0</b>unreached</span></div>
+  </section>
+
+  <section class="mapwrap"><svg id="map"></svg></section>
+
+  <aside class="sheet" id="sheet">
+    <div class="grip" id="grip"><span></span></div>
+    <nav class="tabs" id="tabs">
+      <button data-tab="device" class="on">Device</button>
+      <button data-tab="findings">Findings<sup class="risk">3</sup></button>
+      <button data-tab="devices">Devices<sup>14</sup></button>
+      <button data-tab="drift">Drift<sup>3</sup></button>
+    </nav>
+    <div class="body" id="body"></div>
+  </aside>
+
+  <footer class="bottombar">
+    <div class="progress"><i id="bar"></i></div>
+    <div class="status"><span id="status">Survey complete</span><span class="tag hidden" id="tag">STOPPED EARLY</span><small id="statusSub">Tap a device to see what is known about it</small></div>
+    <button class="pill" id="survey">Survey</button>
+    <button class="pill stop hidden" id="stop">Stop</button>
+  </footer>
+</div>
+
+<script src="data.js"></script>
+<script>
+const C = window.CARTA;
+const $ = id => document.getElementById(id);
+const byId = Object.fromEntries(C.devices.map(d => [d.id, d]));
+const state = { selected: 'gw', tab: 'device', filter: '', swept: 254, sheet: 'peek', timer: null };
+
+/* ---------- sheet: peek, half, full ---------- */
+const heights = () => {
+  const phone = $('phone').clientHeight, bar = $('phone').querySelector('.bottombar').clientHeight;
+  // peek shows the tabs and the selected device's name and address, nothing cut
+  return { peek: 138, half: Math.round((phone - bar) * 0.52), full: phone - bar - 80 };
+};
+function setSheet(s) {
+  const was = state.sheet;
+  state.sheet = s; $('sheet').style.height = heights()[s] + 'px'; $('sheet').classList.toggle('peek', s === 'peek');
+  $('phone').classList.toggle('compact', s !== 'peek');
+  if ((was === 'peek') !== (s === 'peek') && W.w) { measure(); keepVisible(state.selected); drawMap(); }
+}
+let gripDrag = null;
+$('grip').addEventListener('pointerdown', ev => { gripDrag = { y: ev.clientY, h: $('sheet').clientHeight, moved: false }; $('sheet').style.transition = 'none'; $('grip').setPointerCapture(ev.pointerId); });
+$('grip').addEventListener('pointermove', ev => {
+  if (!gripDrag) return;
+  const h = heights(), nh = Math.max(h.peek, Math.min(h.full, gripDrag.h + (gripDrag.y - ev.clientY)));
+  if (Math.abs(gripDrag.y - ev.clientY) > 4) gripDrag.moved = true;
+  $('sheet').style.height = nh + 'px';
+});
+$('grip').addEventListener('pointerup', () => {
+  if (!gripDrag) return;
+  $('sheet').style.transition = '';
+  const h = heights(), cur = $('sheet').clientHeight;
+  if (!gripDrag.moved) setSheet({ peek: 'half', half: 'full', full: 'peek' }[state.sheet]);   // a tap steps through
+  else setSheet(Object.entries(h).sort((a, b) => Math.abs(a[1] - cur) - Math.abs(b[1] - cur))[0][0]);
+  gripDrag = null;
+});
+
+/* ---------- map ---------- */
+const svg = $('map'), NS = 'http://www.w3.org/2000/svg';
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const node = (tag, attrs, parent = svg) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent.append(e); return e; };
+const W = { w: 0, h: 0 };
+// The bottom of the map sits under the peeking sheet, so devices are laid out
+// in the part that stays visible.
+// Devices are laid out in the part of the map the peeking sheet leaves, so
+// the whole network shows before anything is opened.
+let layoutH = 0;
+const at = id => {
+  const n = C.layout[id];
+  return [30 + n.u * (W.w - 60), 22 + n.v * layoutH];
+};
+let view = { x: 0, y: 0, w: 1, h: 1 };
+const setView = () => svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.w} ${view.h}`);
+function measure() {
+  W.w = svg.clientWidth; W.h = svg.clientHeight; view = { x: 0, y: 0, w: W.w, h: W.h }; setView();
+  if (state.sheet === 'peek' || !layoutH) layoutH = W.h - 138 - $('phone').querySelector('.bottombar').clientHeight - 40;
+}
+
+function drawMap() {
+  svg.textContent = '';
+  for (const l of C.links) { const [x1, y1] = at(l.a), [x2, y2] = at(l.b); node('line', { x1, y1, x2, y2, stroke: '#232322', 'stroke-width': 1 }); }
+  for (const d of C.devices) {
+    const [x, y] = at(d.id), sel = d.id === state.selected, r = d.kind === 'infra' ? 6 : 4;
+    const g = node('g', { 'data-id': d.id });
+    node('circle', { cx: x, cy: y, r: 20, fill: 'transparent' }, g);   // a fingertip needs a wide target
+    if (sel) node('circle', { cx: x, cy: y, r: r + 8, fill: 'none', stroke: css('--red'), 'stroke-width': 1 }, g);
+    const colour = sel ? css('--red') : css('--fg');
+    if (d.kind === 'unknown') node('circle', { cx: x, cy: y, r, fill: 'none', stroke: sel ? colour : css('--amber'), 'stroke-width': 1.3, 'stroke-dasharray': '2 2' }, g);
+    else if (d.kind === 'partial') node('circle', { cx: x, cy: y, r, fill: 'none', stroke: colour, 'stroke-width': 1.3 }, g);
+    else node('circle', { cx: x, cy: y, r, fill: colour }, g);
+    const gap = r + (sel ? 13 : 7);
+    const t = node('text', { x: x + gap, y: y + 4, fill: sel ? css('--fg') : (d.kind === 'unknown' ? css('--dim') : css('--dim')), 'font-size': 11, 'font-family': css('--sans') }, g);
+    t.textContent = d.label;
+    // A label that would run off the right edge goes on the dot's left instead.
+    if (x + gap + t.getComputedTextLength() > W.w - 10) { t.setAttribute('x', x - gap); t.setAttribute('text-anchor', 'end'); }
+  }
+}
+
+// one finger pans, two fingers pinch, a tap without movement selects
+const pts = new Map(); let pan = null, pinch = null;
+svg.addEventListener('pointerdown', ev => {
+  svg.setPointerCapture(ev.pointerId); pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pts.size === 1) pan = { x: ev.clientX, y: ev.clientY, vx: view.x, vy: view.y, moved: false, target: ev.target.closest('g') };
+  if (pts.size === 2) { const [a, b] = [...pts.values()]; pinch = { d: Math.hypot(a.x - b.x, a.y - b.y), w: view.w, h: view.h }; pan = null; }
+});
+svg.addEventListener('pointermove', ev => {
+  if (!pts.has(ev.pointerId)) return;
+  pts.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+  if (pinch && pts.size === 2) {
+    const [a, b] = [...pts.values()], f = pinch.d / Math.hypot(a.x - b.x, a.y - b.y);
+    const cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+    view.w = Math.min(W.w * 2, Math.max(W.w / 4, pinch.w * f)); view.h = view.w * W.h / W.w;
+    view.x = cx - view.w / 2; view.y = cy - view.h / 2; setView();
+  } else if (pan) {
+    const dx = ev.clientX - pan.x, dy = ev.clientY - pan.y;
+    if (Math.hypot(dx, dy) > 6) pan.moved = true;
+    if (pan.moved) { const k = view.w / W.w; view.x = pan.vx - dx * k; view.y = pan.vy - dy * k; setView(); }
+  }
+});
+svg.addEventListener('pointerup', ev => {
+  if (pan && !pan.moved && pan.target) select(pan.target.dataset.id);
+  pts.delete(ev.pointerId); if (pts.size < 2) pinch = null; if (!pts.size) pan = null;
+});
+svg.addEventListener('wheel', ev => {   // for trying the mock with a mouse
+  ev.preventDefault();
+  const f = Math.pow(1.0015, ev.deltaY), cx = view.x + view.w / 2, cy = view.y + view.h / 2;
+  view.w = Math.min(W.w * 2, Math.max(W.w / 4, view.w * f)); view.h = view.w * W.h / W.w;
+  view.x = cx - view.w / 2; view.y = cy - view.h / 2; setView();
+}, { passive: false });
+
+/* ---------- sheet content ---------- */
+function select(id) {
+  state.selected = id; state.tab = 'device';
+  if (state.sheet === 'peek') setSheet('half');
+  keepVisible(id);
+  render();
+}
+// The sheet covers the bottom of the map, so selecting a device moves the map
+// until that device sits in the part still showing.
+function keepVisible(id) {
+  const covered = heights()[state.sheet] + $('phone').querySelector('.bottombar').clientHeight;
+  const visible = W.h - covered, k = view.h / W.h, [, y] = at(id);
+  const screenY = (y - view.y) / k;
+  // move only as far as needed, so as much of the rest stays in view
+  if (screenY > visible - 40) { view.y = y - (visible - 70) * k; setView(); }
+  else if (screenY < 30) { view.y = y - 60 * k; setView(); }
+}
+function renderDevice() {
+  const d = byId[state.selected], claims = C.claims[d.id] || [], svc = C.services[d.id] || [];
+  return `<div class="dev">
+    <div class="peekline"><h2>${d.label}</h2><span class="caps" style="color:var(--red)">Selected</span></div>
+    <div class="addr">${d.ip}${d.mac ? '&nbsp;&nbsp;' + d.mac : ''}</div>
+    <div class="claims">${claims.map(c => c.value ? `
+      <div class="claim"><div class="k">${c.key}</div>
+        <div class="v"><span>${c.value}</span><span class="conf ${c.conf}">${c.conf}</span></div>
+        <div class="e">${c.method}: ${c.evidence}</div></div>` : `
+      <div class="claim"><div class="k">${c.key}</div><div class="v none">not learned</div></div>`).join('')}
+    </div>
+    ${svc.length ? `<div class="sub"><div class="caps">Services</div>${svc.map(v =>
+      `<div class="svc"><span>${v.name}<span>${v.port}</span></span><span class="conf ${v.conf}">${v.conf}</span></div>`).join('')}</div>` : ''}
+  </div>`;
+}
+function renderFindings() {
+  return C.findings.map(f => `<button class="row finding" data-select="${f.entity}">
+    <span class="bar ${f.severity}"></span>
+    <span><span class="title"><span>${f.title}</span><span class="conf ${f.conf}">${f.conf}</span></span><p>${f.detail}</p></span></button>`).join('');
+}
+function renderDevices() {
+  const q = state.filter.toLowerCase();
+  const rows = C.devices.filter(d => !q || `${d.label} ${d.ip} ${d.sub}`.toLowerCase().includes(q));
+  return `<input class="filter" id="filter" placeholder="Filter by name, address or kind" value="${state.filter}">` +
+    rows.map(d => `<button class="row device ${d.id === state.selected ? 'sel' : ''}" data-select="${d.id}">
+      <span class="name ${d.kind === 'unknown' ? 'unk' : ''}">${d.label}</span>
+      <span class="what">${d.label === d.ip ? '' : d.ip + '<br>'}${d.sub}</span></button>`).join('') +
+    (rows.length ? '' : '<p class="note">No device matches.</p>');
+}
+function renderDrift() {
+  return `<p class="since">Since the survey of ${C.drift.since}</p>` + C.drift.changes.map(c => `
+    <button class="row drift" data-select="${c.id}"><div class="kind">${c.kind}</div><div class="name">${c.entity}</div>
+      <div class="what">${c.text}${c.by ? `<br>matched by ${c.by}, ${c.conf}` : ''}</div></button>`).join('');
+}
+function render() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === state.tab));
+  $('body').innerHTML = { device: renderDevice, findings: renderFindings, devices: renderDevices, drift: renderDrift }[state.tab]();
+  document.querySelectorAll('[data-select]').forEach(b => b.onclick = () => select(b.dataset.select));
+  const f = $('filter');
+  if (f) f.oninput = () => { state.filter = f.value; render(); const g = $('filter'); g.focus(); g.setSelectionRange(g.value.length, g.value.length); };
+  drawMap();
+}
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => {
+  state.tab = b.dataset.tab; if (state.sheet === 'peek') setSheet('half'); render();
+});
+
+/* ---------- coverage ---------- */
+function renderCoverage() {
+  let ans = 0, sil = 0;
+  $('matrix').innerHTML = Array.from({ length: 254 }, (_, i) => {
+    if (i >= state.swept) return '<i class="u"></i>';
+    if (C.coverage.isAnswered(i + 1)) { ans++; return '<i class="a"></i>'; }
+    sil++; return '<i></i>';
+  }).join('');
+  $('nAns').textContent = ans; $('nSil').textContent = sil; $('nUnr').textContent = 254 - state.swept; $('count').textContent = ans;
+}
+
+/* ---------- survey (simulated; this mock touches no network) ---------- */
+const stages = [['Orienting', 700], ['Listening', 1400], ['Sweeping', 0], ['Probing services', 1000], ['Asking NetBIOS', 600], ['Reverse DNS', 600]];
+function running(on) {
+  $('phone').classList.toggle('running', on);
+  $('survey').classList.toggle('hidden', on); $('stop').classList.toggle('hidden', !on);
+}
+function startSurvey() {
+  running(true); $('tag').classList.add('hidden'); $('statusSub').textContent = 'You can keep reading while it runs';
+  state.swept = 0; renderCoverage();
+  let i = 0, stage = '';
+  const next = () => {
+    if (i >= stages.length) return finish(null);
+    const [name, ms] = stages[i++]; stage = name;
+    if (name === 'Sweeping') {
+      const step = () => {
+        state.swept = Math.min(254, state.swept + 6); renderCoverage();
+        $('status').textContent = `Sweeping ${state.swept} of 254`;
+        $('bar').style.width = (20 + state.swept / 254 * 60) + '%';
+        state.timer = state.swept < 254 ? setTimeout(step, 50) : setTimeout(next, 200);
+      };
+      return step();
+    }
+    $('status').textContent = name + '…';
+    $('bar').style.width = ({ Orienting: 5, Listening: 15, 'Probing services': 85, 'Asking NetBIOS': 92, 'Reverse DNS': 97 }[name]) + '%';
+    state.timer = setTimeout(next, ms);
+  };
+  state.stop = () => finish(stage);
+  next();
+}
+function finish(stoppedIn) {
+  clearTimeout(state.timer); running(false); $('bar').style.width = '0';
+  if (stoppedIn) {
+    $('status').textContent = `Stopped during ${stoppedIn}`; $('tag').classList.remove('hidden');
+    $('statusSub').textContent = `${254 - state.swept} addresses were never reached`;
+  } else {
+    $('status').textContent = 'Survey complete'; $('statusSub').textContent = 'Took 9 s (simulated)'; $('took').textContent = '9 s';
+  }
+  renderCoverage();
+}
+$('survey').onclick = startSurvey;
+$('stop').onclick = () => { $('status').textContent = 'Stopping…'; setTimeout(() => state.stop(), 300); };
+$('compare').onclick = () => { $('statusSub').textContent = 'Compare opens the list of earlier surveys of this network'; };
+
+// ?sheet=half&tab=findings&select=cam opens the mock in that state (used for screenshots)
+const qs = new URLSearchParams(location.search);
+if (qs.get('select')) state.selected = qs.get('select');
+if (qs.get('tab')) state.tab = qs.get('tab');
+measure(); renderCoverage(); setSheet(qs.get('sheet') || 'peek');
+if (qs.get('sheet')) keepVisible(state.selected);
+render();
+window.addEventListener('resize', () => {
+  measure(); setSheet(state.sheet);
+  if (state.sheet !== 'peek') keepVisible(state.selected);
+  drawMap();
+});
+</script>
+</body>
+</html>

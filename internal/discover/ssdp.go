@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/Tanmay-Anand/carta/internal/model"
+	"github.com/Tanmay-Anand/carta/internal/version"
 )
 
 // SSDP (the discovery half of UPnP) is the other side of the multicast coin.
@@ -38,7 +39,7 @@ func SSDP(ctx context.Context, g *model.Graph, window time.Duration) []string {
 		"MAN: \"ssdp:discover\"\r\n" +
 		"MX: 2\r\n" +
 		"ST: ssdp:all\r\n" +
-		"USER-AGENT: carta/0.1 UPnP/1.1\r\n\r\n"
+		"USER-AGENT: carta/" + version.Number + " UPnP/1.1\r\n\r\n"
 
 	// Sent twice: UDP multicast is lossy and a missed M-SEARCH means a device
 	// silently absent from the map.

@@ -23,7 +23,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:paddingStart="22dp"
+            android:paddingTop="30dp"
+            android:paddingEnd="22dp"
+            android:paddingBottom="24dp">
 
             <TextView
                 style="@style/Carta.Title"
@@ -50,7 +53,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="24dp">
+            android:paddingStart="22dp"
+            android:paddingTop="30dp"
+            android:paddingEnd="22dp"
+            android:paddingBottom="24dp">
 
             <TextView
                 android:id="@+id/refusalTitle"
@@ -76,7 +82,8 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="26dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <com.google.android.material.button.MaterialButton
